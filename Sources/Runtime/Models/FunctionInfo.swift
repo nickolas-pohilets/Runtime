@@ -22,11 +22,20 @@
 
 import Foundation
 
+public enum CallingConvention: Int, Hashable {
+    case swift = 0
+    case objC = 1
+    case thin = 2
+    case c = 3
+}
+
 public struct FunctionInfo {
     public var numberOfArguments: Int
     public var argumentTypes: [Any.Type]
     public var returnType: Any.Type
     public var `throws`: Bool
+    public var isEscaping: Bool
+    public var callingConvention: CallingConvention
 }
 
 public func functionInfo(of function: Any) throws -> FunctionInfo {
@@ -36,5 +45,5 @@ public func functionInfo(of function: Any) throws -> FunctionInfo {
 public func functionInfo(of type: Any.Type) throws -> FunctionInfo {
     let kind = Kind(type: type)
     guard kind == .function else { throw RuntimeError.couldNotGetTypeInfo(type: type, kind: kind) }
-    return FunctionMetadata(type: type).info()
+    return try FunctionMetadata(type: type).info()
 }

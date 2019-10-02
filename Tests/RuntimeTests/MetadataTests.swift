@@ -155,21 +155,38 @@ class MetadataTests: XCTestCase {
         XCTAssert(!info.throws)
     }
     
-    func testFunctionThrows() {
+    func testFunctionThrows() throws {
         let t = ((Int) throws -> String).self
         let md = FunctionMetadata(type: t)
-        let info = md.info()
+        let info = try md.info()
         XCTAssert(info.numberOfArguments == 1)
         XCTAssert(info.argumentTypes[0] == Int.self)
         XCTAssert(info.returnType == String.self)
         XCTAssert(info.throws)
     }
     
-    func testVoidFunction() {
+    func testVoidFunction() throws {
         let t = type(of: voidFunction)
         let md = FunctionMetadata(type: t)
-        let info = md.info()
+        let info = try md.info()
         XCTAssert(info.numberOfArguments == 0)
+    }
+    
+    func testFunctionConvention() throws {
+        typealias F0 = (Int) -> AnyObject
+        typealias F1 = @convention(block) (AnyObject) -> AnyObject
+        typealias F2 = @convention(thin) (AnyObject) -> AnyObject
+        typealias F3 = @convention(c) (AnyObject) -> AnyObject
+        let data: [(Any.Type, CallingConvention)] = [
+            (F0.self, .swift),
+            (F1.self, .objC),
+            (F2.self, .thin),
+            (F3.self, .c),
+        ]
+        for (t, cc) in data {
+            let info = try functionInfo(of: t)
+            XCTAssertEqual(info.callingConvention, cc)
+        }
     }
     
     func testEnum() {

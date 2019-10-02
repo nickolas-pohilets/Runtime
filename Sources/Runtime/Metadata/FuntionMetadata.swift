@@ -26,12 +26,14 @@ struct FunctionMetadata: MetadataType {
     
     var pointer: UnsafeMutablePointer<FunctionMetadataLayout>
     
-    func info() -> FunctionInfo {
+    func info() throws -> FunctionInfo {
         let (numberOfArguments, argumentTypes, returnType) = argumentInfo()
         return FunctionInfo(numberOfArguments: numberOfArguments,
                             argumentTypes: argumentTypes,
                             returnType: returnType,
-                            throws: `throws`())
+                            throws: `throws`(),
+                            isEscaping: isEscaping(),
+                            callingConvention: try callingConvention())
     }
     
     private func argumentInfo() -> (Int, [Any.Type], Any.Type) {
@@ -44,11 +46,28 @@ struct FunctionMetadata: MetadataType {
         return (n, argTypes, resultType)
     }
     
+    // See https://github.com/apple/swift/blob/ebcbaca9681816b9ebaa7ba31ef97729e707db93/include/swift/ABI/MetadataValues.h#L738
     private func numberArguments() -> Int {
-        return pointer.pointee.flags & 0x00FFFFFF
+        return pointer.pointee.flags & 0x0000FFFF
+    }
+    
+    private func callingConvention() throws -> CallingConvention {
+        let rawCC = (pointer.pointee.flags & 0x00FF0000) >> 16
+        guard let cc = CallingConvention(rawValue: rawCC) else {
+            throw RuntimeError.unknownCallingConvention(type: self.type, value: rawCC)
+        }
+        return cc
     }
     
     private func `throws`() -> Bool {
         return pointer.pointee.flags & 0x01000000 != 0
+    }
+    
+    private func hasParamFlags() -> Bool {
+        return pointer.pointee.flags & 0x02000000 != 0
+    }
+    
+    private func isEscaping() -> Bool {
+        return pointer.pointee.flags & 0x04000000 != 0
     }
 }
