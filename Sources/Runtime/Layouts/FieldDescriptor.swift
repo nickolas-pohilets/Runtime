@@ -51,35 +51,13 @@ struct FieldRecord {
         return String(cString: _fieldName.advanced())
     }
     
-    mutating func mangedTypeName() -> String {
-        return String(cString: _mangledTypeName.advanced())
+    mutating func mangledTypeName() -> MangledTypeName {
+        return MangledTypeName(_mangledTypeName.advanced())
     }
     
     mutating func type(genericContext: UnsafeRawPointer?,
                        genericArguments: UnsafeRawPointer?) -> Any.Type {
-        let typeName = _mangledTypeName.advanced()
-        let metadataPtr = swift_getTypeByMangledNameInContext(
-            typeName,
-            getSymbolicMangledNameLength(typeName),
-            genericContext,
-            genericArguments?.assumingMemoryBound(to: Optional<UnsafeRawPointer>.self)
-        )!
-        
-        return unsafeBitCast(metadataPtr, to: Any.Type.self)
-    }
-    
-    func getSymbolicMangledNameLength(_ base: UnsafeRawPointer) -> Int32 {
-        var end = base
-        while let current = Optional(end.load(as: UInt8.self)), current != 0 {
-            end += 1
-            if current >= 0x1 && current <= 0x17 {
-                end += 4
-            } else if current >= 0x18 && current <= 0x1F {
-                end += MemoryLayout<Int>.size
-            }
-        }
-        
-        return Int32(end - base)
+        return self.mangledTypeName().type(genericContext: genericContext, genericArguments: genericArguments)
     }
 }
 

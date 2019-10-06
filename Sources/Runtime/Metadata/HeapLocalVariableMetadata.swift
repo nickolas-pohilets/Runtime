@@ -41,44 +41,20 @@ struct HeapLocalVariableMetadata {
         return pointer.pointee.offsetToFirstCapture
     }
 
-    private var _mangedTypeNames: [UnsafeMutablePointer<CChar>] {
+    private var _mangedTypeNames: [MangledTypeName] {
         var buffer = self.pointer.pointee.captureDescription.pointee.captureTypeRecordBuffer()
-        var res: [UnsafeMutablePointer<CChar>] = []
+        var res: [MangledTypeName] = []
         while !buffer.isEmpty {
             let ptr = buffer.baseAddress!.pointee.mangledTypeName.advanced()
-            res.append(ptr)
+            res.append(MangledTypeName(ptr))
             buffer = UnsafeMutableBufferPointer(rebasing: buffer.dropFirst())
         }
         return res
     }
     
-    var typeNames: [String] {
-        return _mangedTypeNames.map { String(utf8String: $0)! }
-    }
-
     var types:[Any.Type] {
         return _mangedTypeNames.map {
-            let metadataPtr = swift_getTypeByMangledNameInContext(
-                $0,
-                getSymbolicMangledNameLength($0),
-                nil,
-                nil
-            )!
-            return unsafeBitCast(metadataPtr, to: Any.Type.self)
+            return $0.type(genericContext: nil, genericArguments: nil)
         }
-    }
-
-    private func getSymbolicMangledNameLength(_ base: UnsafeRawPointer) -> Int32 {
-        var end = base
-        while let current = Optional(end.load(as: UInt8.self)), current != 0 {
-            end += 1
-            if current >= 0x1 && current <= 0x17 {
-                end += 4
-            } else if current >= 0x18 && current <= 0x1F {
-                end += MemoryLayout<Int>.size
-            }
-        }
-
-        return Int32(end - base)
     }
 }

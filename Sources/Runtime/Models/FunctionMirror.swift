@@ -31,20 +31,6 @@ struct SwiftFunction {
     var ctx: UnsafePointer<HeapObject>?
 }
 
-// For some reason when packing function into Any, it wraps function into another function
-// Once we can see that this another function captures a function, recursive comparison should handle this
-// But for now, hardcode this indirection
-struct SwiftFunctionWrapperContext {
-    var md: Any.Type
-    var rc: Int
-    var f: SwiftFunction
-}
-
-struct SwiftFunctionWrapper {
-    var f: @convention(c) (AnyObject) -> Void
-    var ctx: UnsafePointer<SwiftFunctionWrapperContext>
-}
-
 public struct FunctionMirror {
     public var info: FunctionInfo
     public var function: UnsafeRawPointer
@@ -62,8 +48,7 @@ public struct FunctionMirror {
         var values: [Any] = []
 
         try withValuePointer(of: &ff) {
-            let ptr = $0.assumingMemoryBound(to: SwiftFunctionWrapper.self)
-            let f = ptr.pointee.ctx.pointee.f
+            let f = $0.assumingMemoryBound(to: SwiftFunction.self).pointee
 
             funcPtr = unsafeBitCast(f.f, to: UnsafeRawPointer.self)
 

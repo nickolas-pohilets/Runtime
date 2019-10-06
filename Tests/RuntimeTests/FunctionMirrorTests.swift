@@ -23,10 +23,22 @@
 import XCTest
 @testable import Runtime
 
-struct CaptureMe: Hashable {
+fileprivate struct MyStruct: Hashable {
     let a: Int
     let b: String
     let c: [Bool]
+}
+
+fileprivate class MyClass {
+    var value: String
+
+    init(value: String) {
+        self.value = value
+    }
+
+    func dump() {
+        print(self.value)
+    }
 }
 
 class FunctionMirrorTests: XCTestCase {
@@ -49,8 +61,12 @@ class FunctionMirrorTests: XCTestCase {
         return { print(x) }
     }
 
-    private func makeStruct(_ s: CaptureMe) -> () -> Void {
+    private func makeStruct(_ s: MyStruct) -> () -> Void {
         return { print(s) }
+    }
+
+    private func makeMethod(_ value: String) -> () -> Void {
+        return MyClass(value: value).dump
     }
 
     private func makeGeneric<T: Hashable, U: Hashable>(x: T, y: U) -> () -> Void {
@@ -81,15 +97,27 @@ class FunctionMirrorTests: XCTestCase {
         }
     }
 
+    func mirror(reflecting f: Any) throws -> FunctionMirror {
+        let m = try FunctionMirror(reflecting: f)
+        if m.capturedValues.count == 1 {
+            let value = m.capturedValues[0]
+            let info = try metadata(of: type(of: value))
+            if info.kind == .function {
+                return try FunctionMirror(reflecting: value)
+            }
+        }
+        return m
+    }
+
     func testEmpty() throws {
         let f = makeEmptyFunc()
-        let m = try FunctionMirror(reflecting: f)
+        let m = try mirror(reflecting: f)
         XCTAssert(m.capturedValues.isEmpty)
     }
     
     func testBuiltIn() throws {
         let f = makeBuiltIn(37, "abc", 42, true)
-        let m = try FunctionMirror(reflecting: f)
+        let m = try mirror(reflecting: f)
         XCTAssertEqual(m.capturedValues.count, 4)
         XCTAssertEqual(m.capturedValues[0] as? Bool, true)
         XCTAssertEqual(m.capturedValues[1] as? Int, 37)
@@ -100,25 +128,37 @@ class FunctionMirrorTests: XCTestCase {
     func testArray() throws {
         let x = ["abc", "def", "long long long string that would not fit into inline buffer"]
         let f = makeArray(x)
-        let m = try FunctionMirror(reflecting: f)
+        let m = try mirror(reflecting: f)
         XCTAssertEqual(m.capturedValues.count, 1)
         XCTAssertEqual(m.capturedValues[0] as? [String], x)
     }
 
     func testStruct() throws {
-        let s = CaptureMe(a: 22, b: "xyz", c: [true, false, true])
+        let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
         let f = makeStruct(s)
-        let m = try FunctionMirror(reflecting: f)
+        let m = try mirror(reflecting: f)
         XCTAssertEqual(m.capturedValues.count, 1)
-        XCTAssertEqual(m.capturedValues[0] as? CaptureMe, s)
+        XCTAssertEqual(m.capturedValues[0] as? MyStruct, s)
     }
 
-    func testGeneric() throws {
-        let s = CaptureMe(a: 22, b: "xyz", c: [true, false, true])
-        let f = makeGeneric(x: [s], y: s)
-        let m = try FunctionMirror(reflecting: f)
+    func testMethod() throws {
+        let f = makeMethod("hello")
+        let m = try mirror(reflecting: f)
         XCTAssertEqual(m.capturedValues.count, 2)
-        XCTAssertEqual(m.capturedValues[0] as? [CaptureMe], [s])
-        XCTAssertEqual(m.capturedValues[1] as? CaptureMe, s)
+        if let obj = m.capturedValues[0] as? MyClass {
+            XCTAssertEqual(obj.value, "hello")
+        } else {
+            XCTFail("Failed to read captured instance")
+        }
+        XCTAssert(m.capturedValues[1] is UnsafeRawPointer)
+    }
+
+    func skip_testGeneric() throws {
+        let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
+        let f = makeGeneric(x: [s], y: s)
+        let m = try mirror(reflecting: f)
+        XCTAssertEqual(m.capturedValues.count, 2)
+        XCTAssertEqual(m.capturedValues[0] as? [MyStruct], [s])
+        XCTAssertEqual(m.capturedValues[1] as? MyStruct, s)
     }
 }

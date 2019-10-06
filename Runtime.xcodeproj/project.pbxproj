@@ -35,6 +35,7 @@
 		4A78BDD723451E4E00424C83 /* HeapLocalVariableMetadataLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A78BDD623451E4E00424C83 /* HeapLocalVariableMetadataLayout.swift */; };
 		4A78BDD823452CF400424C83 /* FunctionMirrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A78BDD42345121200424C83 /* FunctionMirrorTests.swift */; };
 		4A78BDDA23452EE700424C83 /* HeapLocalVariableMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A78BDD923452EE700424C83 /* HeapLocalVariableMetadata.swift */; };
+		4AC0A845234A87500032793E /* MangledTypeName.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC0A844234A87500032793E /* MangledTypeName.swift */; };
 		OBJ_100 /* MetadataLayoutType.swift in Sources */ = {isa = PBXBuildFile; fileRef = OBJ_22 /* MetadataLayoutType.swift */; };
 		OBJ_101 /* ProtocolDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = OBJ_23 /* ProtocolDescriptor.swift */; };
 		OBJ_102 /* ProtocolMetadataLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = OBJ_24 /* ProtocolMetadataLayout.swift */; };
@@ -113,6 +114,7 @@
 		4A78BDD42345121200424C83 /* FunctionMirrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunctionMirrorTests.swift; sourceTree = "<group>"; };
 		4A78BDD623451E4E00424C83 /* HeapLocalVariableMetadataLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeapLocalVariableMetadataLayout.swift; sourceTree = "<group>"; };
 		4A78BDD923452EE700424C83 /* HeapLocalVariableMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeapLocalVariableMetadata.swift; sourceTree = "<group>"; };
+		4AC0A844234A87500032793E /* MangledTypeName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangledTypeName.swift; sourceTree = "<group>"; };
 		OBJ_11 /* DefaultValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultValue.swift; sourceTree = "<group>"; };
 		OBJ_12 /* Factory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Factory.swift; sourceTree = "<group>"; };
 		OBJ_14 /* ClassHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassHeader.swift; sourceTree = "<group>"; };
@@ -228,6 +230,7 @@
 				OBJ_30 /* TypeDescriptor.swift */,
 				OBJ_31 /* ValueWitnessTable.swift */,
 				4A78BDD623451E4E00424C83 /* HeapLocalVariableMetadataLayout.swift */,
+				4AC0A844234A87500032793E /* MangledTypeName.swift */,
 			);
 			path = Layouts;
 			sourceTree = "<group>";
@@ -264,7 +267,7 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
-		OBJ_5 /*  */ = {
+		OBJ_5 = {
 			isa = PBXGroup;
 			children = (
 				OBJ_6 /* Package.swift */,
@@ -279,7 +282,6 @@
 				OBJ_79 /* Podfile */,
 				OBJ_80 /* Runtime.podspec */,
 			);
-			name = "";
 			sourceTree = "<group>";
 		};
 		OBJ_50 /* Pointers */ = {
@@ -435,7 +437,7 @@
 			knownRegions = (
 				en,
 			);
-			mainGroup = OBJ_5 /*  */;
+			mainGroup = OBJ_5;
 			productRefGroup = OBJ_72 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -510,6 +512,7 @@
 				4A78BDD723451E4E00424C83 /* HeapLocalVariableMetadataLayout.swift in Sources */,
 				OBJ_119 /* Case.swift in Sources */,
 				OBJ_120 /* Errors.swift in Sources */,
+				4AC0A845234A87500032793E /* MangledTypeName.swift in Sources */,
 				OBJ_121 /* FunctionInfo.swift in Sources */,
 				OBJ_122 /* Kind.swift in Sources */,
 				OBJ_123 /* PropertyInfo.swift in Sources */,
