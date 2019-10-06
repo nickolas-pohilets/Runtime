@@ -29,4 +29,5 @@ enum RuntimeError: Error {
     case unableToBuildType(type: Any.Type)
     case errorGettingValue(name: String, type: Any.Type)
     case unknownCallingConvention(type: Any.Type, value: Int)
+    case unsupportedCallingConvention(function: Any, callingConvention: CallingConvention)
 }

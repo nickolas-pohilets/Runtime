@@ -41,6 +41,8 @@ func metadata(of type: Any.Type) throws -> MetadataInfo {
         return TupleMetadata(type: type)
     case .enum:
         return EnumMetadata(type: type)
+    case .function:
+        return FunctionMetadata(type: type)
     default:
         throw RuntimeError.couldNotGetTypeInfo(type: type, kind: kind)
     }
