@@ -34,6 +34,7 @@ struct SwiftFunction {
 public struct FunctionMirror {
     public var info: FunctionInfo
     public var function: UnsafeRawPointer
+    public var context: UnsafeRawPointer?
     public var capturedValues: [Any]
 
     public init(reflecting f: Any) throws {
@@ -45,6 +46,7 @@ public struct FunctionMirror {
         var ff = f
 
         var funcPtr = UnsafeRawPointer(bitPattern: 0)
+        var ctxPtr = UnsafeRawPointer(bitPattern: 0)
         var values: [Any] = []
 
         try withValuePointer(of: &ff) {
@@ -53,6 +55,7 @@ public struct FunctionMirror {
             funcPtr = unsafeBitCast(f.f, to: UnsafeRawPointer.self)
 
             guard let ctx = f.ctx else { return }
+            ctxPtr = ctx.raw
             let type = ctx.pointee.md
             let kind = Kind(type: type)
             assert(kind == .heapLocalVariable)
@@ -71,6 +74,7 @@ public struct FunctionMirror {
         }
 
         self.function = funcPtr!
+        self.context = ctxPtr
         self.capturedValues = values
     }
 }

@@ -69,6 +69,17 @@ class FunctionMirrorTests: XCTestCase {
         return MyClass(value: value).dump
     }
 
+    private func makeVarSharedContext() -> (() -> Void, () -> Void) {
+        var foo: [String] = ["foo", "bar", "baz"]
+        let f1 = {
+            foo.append("qux")
+        }
+        let f2 = {
+            foo.append("zop")
+        }
+        return (f1, f2)
+    }
+
     private func makeGeneric<T: Hashable, U: Hashable>(x: T, y: U) -> () -> Void {
         return { print(x, y) }
     }
@@ -153,9 +164,62 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssert(m.capturedValues[1] is UnsafeRawPointer)
     }
 
+    func testVarSharedContext() throws {
+        // Optimized case - variable is captured as if by value, but instead context is shared between two closures
+        let (f1, f2) = makeVarSharedContext()
+        var ctx: UnsafeRawPointer? = nil
+        do {
+            let m1 = try mirror(reflecting: f1)
+            let m2 = try mirror(reflecting: f2)
+            XCTAssertEqual(m1.capturedValues.count, 1)
+            XCTAssertEqual(m1.capturedValues[0] as? [String], ["foo", "bar", "baz"])
+            //XCTAssertEqual(m1.capturedValues[1] as? Int, 42)
+            XCTAssertEqual(m2.capturedValues.count, 1)
+            XCTAssertEqual(m2.capturedValues[0] as? [String], ["foo", "bar", "baz"])
+            //XCTAssertEqual(m2.capturedValues[1] as? Int, 42)
+            XCTAssertEqual(m1.context, m2.context)
+            ctx = m1.context
+        }
+        f2()
+        do {
+            let m1 = try mirror(reflecting: f1)
+            let m2 = try mirror(reflecting: f2)
+            XCTAssertEqual(m1.capturedValues.count, 1)
+            XCTAssertEqual(m1.capturedValues[0] as? [String], ["foo", "bar", "baz", "zop"])
+            //XCTAssertEqual(m1.capturedValues[1] as? Int, 47)
+            XCTAssertEqual(m2.capturedValues.count, 1)
+            XCTAssertEqual(m2.capturedValues[0] as? [String], ["foo", "bar", "baz", "zop"])
+            //XCTAssertEqual(m2.capturedValues[1] as? Int, 47)
+            XCTAssertEqual(m1.context, m2.context)
+            XCTAssertEqual(m1.context, ctx)
+        }
+    }
+
+    func testOpaqueVar() throws {
+        let (f1, f2) = makeCapture()
+        let m1 = try mirror(reflecting: f1)
+        XCTAssertEqual(m1.capturedValues.count, 1)
+        f2()
+        let m2 = try mirror(reflecting: f1)
+        XCTAssertEqual(m2.capturedValues.count, 1)
+        let m3 = try mirror(reflecting: f2)
+        XCTAssertEqual(m3.capturedValues.count, 1)
+    }
+
     func skip_testGeneric() throws {
         let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
-        let f = makeGeneric(x: [s], y: s)
+//        let g = makeGenericStruct(x: [s], y: s)
+//        let ti = try typeInfo(of: type(of: g))
+//        print(ti)
+
+        // types:
+        //    "xz_x_q_SHRzSHR_r0_lXX"
+        //   "q_z_x_q_SHRzSHR_r0_lXX"
+        // sources:
+        //  "x" -> B0
+        //  "q_" -> B1
+        //let f = makeGeneric(x: [s], y: s)
+        let f = makeGeneric2(x: s)
         let m = try mirror(reflecting: f)
         XCTAssertEqual(m.capturedValues.count, 2)
         XCTAssertEqual(m.capturedValues[0] as? [MyStruct], [s])
