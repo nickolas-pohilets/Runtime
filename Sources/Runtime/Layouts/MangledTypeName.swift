@@ -23,7 +23,7 @@
 import Foundation
 import CRuntime
 
-struct MangledTypeName {
+struct MangledTypeName: CustomStringConvertible {
     var base: UnsafePointer<UInt8>
     var length: Int32
 
@@ -36,7 +36,7 @@ struct MangledTypeName {
             if current >= 0x1 && current <= 0x17 {
                 end += 4
             } else if current >= 0x18 && current <= 0x1F {
-                end += MemoryLayout<Int>.size
+                end += MemoryLayout<UnsafeRawPointer>.size
             }
         }
 
@@ -59,5 +59,32 @@ struct MangledTypeName {
             genericArguments?.assumingMemoryBound(to: Optional<UnsafeRawPointer>.self)
         )!
         return unsafeBitCast(metadataPtr, to: Any.Type.self)
+    }
+
+    var description: String {
+        var res = ""
+
+        var end = base
+        while let current = Optional(end.pointee), current != 0 {
+            end += 1
+            if current >= 0x1 && current <= 0x1F {
+                let ptr: UnsafeRawPointer
+                if current < 0x18 {
+                    // Relative reference
+                    let offset = end.raw.assumingMemoryBound(to: Int32.self).pointee
+                    ptr = end.raw.advanced(by: Int(offset)).assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+                    end += 4
+                } else {
+                    // Absolute reference reference
+                    ptr = end.raw.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+                    end += MemoryLayout<UnsafeRawPointer>.size
+                }
+                let kind = String(format: "%02x", current)
+                res += "{\(kind):\(ptr)}"
+            } else {
+                res.unicodeScalars.append(UnicodeScalar(current))
+            }
+        }
+        return res
     }
 }
