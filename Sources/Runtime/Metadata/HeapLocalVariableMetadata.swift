@@ -24,11 +24,11 @@ import Foundation
 import CRuntime
 
 extension UnsafeMutableBufferPointer {
-    func forEachPointer<T>(_ block: (UnsafeMutablePointer<Element>) -> T) -> [T] {
+    func forEachPointer<T>(_ block: (UnsafeMutablePointer<Element>) throws -> T) rethrows -> [T] {
         var buffer = self
         var res: [T] = []
         while !buffer.isEmpty {
-            res.append(block(buffer.baseAddress!))
+            res.append(try block(buffer.baseAddress!))
             buffer = UnsafeMutableBufferPointer(rebasing: buffer.dropFirst())
         }
         return res
@@ -57,24 +57,29 @@ struct HeapLocalVariableMetadata {
         return pointer.pointee.captureDescription.pointee.numBindings
     }
 
-    private var capturedTypes: [MangledTypeName] {
+    private func capturedTypes() -> [MangledTypeName] {
         let buffer = self.pointer.pointee.captureDescription.pointee.captureTypeRecordBuffer()
         return buffer.forEachPointer {
             MangledTypeName($0.pointee.mangledTypeName.advanced())
         }
     }
 
-    private var metadataSources: [(MangledTypeName, UnsafeRawPointer)] {
+    private func metadataSources() throws -> [(MangledTypeName, MetadataSource)] {
         let buffer = self.pointer.pointee.captureDescription.pointee.metadataSourceRecordBuffer()
-        return buffer.forEachPointer {
+        return try buffer.forEachPointer {
             let type = MangledTypeName($0.pointee.mangledTypeName.advanced())
-            let source = UnsafeRawPointer($0.pointee.mangledMetadataSource.advanced())
+            let encodedSource = UnsafeRawPointer($0.pointee.mangledMetadataSource.advanced())
+            let source = try MetadataSource(ptr: encodedSource)
             return (type, source)
         }
     }
     
-    var types: [Any.Type] {
-        return capturedTypes.map {
+    func types() throws -> [Any.Type] {
+        let sources = try self.metadataSources()
+        print(sources)
+        let types = self.capturedTypes()
+        print(types.description)
+        return types.map {
             return $0.type(genericContext: nil, genericArguments: nil)
         }
     }
@@ -84,7 +89,7 @@ struct HeapLocalVariableMetadata {
         offset += MemoryLayout<Any.Type>.size * Int(self.numBindings)
 
         var res: [(Int, Any.Type)] = []
-        for type in self.types {
+        for type in try self.types() {
             var effectiveType = type
             if Kind(type: type) == .opaque {
                 effectiveType = ByRefMirror.self

@@ -58,6 +58,30 @@ struct ArrayAndInt: Hashable {
     var b: Int
 }
 
+private extension Hashable {
+    func makeGeneric() -> () -> Void {
+        return { print(self) }
+    }
+}
+
+class GenericProvider<T: Hashable> {
+    let x: T
+
+    init(x: T) {
+        self.x = x
+    }
+
+    func makeGeneric(_ y: T) -> () -> Void {
+        return {
+            if (self.x == y) {
+                print("equal")
+            } else {
+                print("not equal")
+            }
+        }
+    }
+}
+
 class FunctionMirrorTests: XCTestCase {
     
 //    static var allTests: [(String, (FunctionMirrorTests) -> () throws -> Void)] {
@@ -131,6 +155,11 @@ class FunctionMirrorTests: XCTestCase {
 
     private func makeGenericStruct<T: Hashable, U: Hashable>(x: T, y: U) -> Any {
         return Foo(x: x, y: y)
+    }
+
+    private func makeGenericMD<T>(type: T.Type) -> () -> Void {
+        let x: [T] = []
+        return { print(type, x) }
     }
 
     func mirror(reflecting f: Any) throws -> FunctionMirror {
@@ -256,20 +285,61 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertEqual(f2(), ArrayAndInt(a: ["xyz", "zop"], b: 6))
     }
 
-    func skip_testGeneric() throws {
+    func testMetadataSource() {
+        XCTAssertEqual(try MetadataSource(string: "B1"), MetadataSource.closureBinding(index: 1))
+        XCTAssertEqual(try MetadataSource(string: "R0"), MetadataSource.referenceCapture(index: 0))
+        XCTAssertEqual(try MetadataSource(string: "M106"), MetadataSource.metadataCapture(index: 106))
+        XCTAssertEqual(try MetadataSource(string: "G0R1_"), MetadataSource.genericArgument(index: 0, base: .referenceCapture(index: 1)))
+        XCTAssertEqual(try MetadataSource(string: "S"), MetadataSource.`self`)
+    }
+
+    func testGeneric() throws {
         let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
 //        let g = makeGenericStruct(x: [s], y: s)
 //        let ti = try typeInfo(of: type(of: g))
 //        print(ti)
 
-        // types:
+        // Case 1
+        //  types:
         //    "xz_x_q_SHRzSHR_r0_lXX"
-        //   "q_z_x_q_SHRzSHR_r0_lXX"
-        // sources:
-        //  "x" -> B0
-        //  "q_" -> B1
+        //    "q_z_x_q_SHRzSHR_r0_lXX"
+        //  sources:
+        //    "x" -> B0
+        //    "q_" -> B1
         //let f = makeGeneric(x: [s], y: s)
-        let f = makeGeneric2(x: s)
+
+        // Case 2:
+        //  types:
+        //    "xz_x_SHRzlXX"
+        //    "SayxG"
+        //    "xSgz_x_SHRzlXX"
+        //  sources:
+        //    "x" -> B0
+        //let f = makeGeneric2(x: s)
+
+        // Case 3:
+        //  types:
+        //     "xz_x_SHRzlXX"
+        //  sources:
+        //     "x" -> "B0"
+        // let f = s.makeGeneric()
+
+        // Case 4:
+        //  types:
+        //    {01:0xfffffe84800000d0}yxG
+        //    xz_x_SHRzlXX
+        //  sources:
+        //     "x" -> "G0R0_"
+        //     no bindings
+        //let f = GenericProvider<String>(x: "abc").makeGeneric("xyz")
+
+        //  'B' -> ClosureBinding
+        //  'R' -> ReferenceCapture
+        //  'M' -> MetadataCapture
+        //  'G' -> GenericArgument
+        //  'S' -> Self
+        //let f = makeGenericMD(type: MyStruct.self)
+        let f = makeGeneric(x: 0xaaaaaaaaaaaa, y: 0xbbbbbbbbbbbb)
         let m = try mirror(reflecting: f)
         XCTAssertEqual(m.capturedValues.count, 2)
         XCTAssertEqual(m.capturedValues[0] as? [MyStruct], [s])

@@ -31,4 +31,5 @@ enum RuntimeError: Error {
     case unknownCallingConvention(type: Any.Type, value: Int)
     case unsupportedCallingConvention(function: Any, callingConvention: CallingConvention)
     case unexpectedByRefLayout(type: Any.Type)
+    case unexpectedMetadataSource(source: String)
 }

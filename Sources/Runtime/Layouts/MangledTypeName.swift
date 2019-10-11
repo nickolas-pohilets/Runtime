@@ -72,7 +72,7 @@ struct MangledTypeName: CustomStringConvertible {
                 if current < 0x18 {
                     // Relative reference
                     let offset = end.raw.assumingMemoryBound(to: Int32.self).pointee
-                    ptr = end.raw.advanced(by: Int(offset)).assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+                    ptr = end.raw.advanced(by: Int(offset))
                     end += 4
                 } else {
                     // Absolute reference reference
