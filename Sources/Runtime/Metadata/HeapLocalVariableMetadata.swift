@@ -23,6 +23,18 @@
 import Foundation
 import CRuntime
 
+extension UnsafeMutableBufferPointer {
+    func forEachPointer<T>(_ block: (UnsafeMutablePointer<Element>) -> T) -> [T] {
+        var buffer = self
+        var res: [T] = []
+        while !buffer.isEmpty {
+            res.append(block(buffer.baseAddress!))
+            buffer = UnsafeMutableBufferPointer(rebasing: buffer.dropFirst())
+        }
+        return res
+    }
+}
+
 struct HeapLocalVariableMetadata {
     var pointer: UnsafeMutablePointer<HeapLocalVariableMetadataLayout>
     init(type: Any.Type) {
@@ -41,20 +53,47 @@ struct HeapLocalVariableMetadata {
         return pointer.pointee.offsetToFirstCapture
     }
 
-    private var _mangedTypeNames: [MangledTypeName] {
-        var buffer = self.pointer.pointee.captureDescription.pointee.captureTypeRecordBuffer()
-        var res: [MangledTypeName] = []
-        while !buffer.isEmpty {
-            let ptr = buffer.baseAddress!.pointee.mangledTypeName.advanced()
-            res.append(MangledTypeName(ptr))
-            buffer = UnsafeMutableBufferPointer(rebasing: buffer.dropFirst())
+    var numBindings: UInt32 {
+        return pointer.pointee.captureDescription.pointee.numBindings
+    }
+
+    private var capturedTypes: [MangledTypeName] {
+        let buffer = self.pointer.pointee.captureDescription.pointee.captureTypeRecordBuffer()
+        return buffer.forEachPointer {
+            MangledTypeName($0.pointee.mangledTypeName.advanced())
         }
-        return res
+    }
+
+    private var metadataSources: [(MangledTypeName, UnsafeRawPointer)] {
+        let buffer = self.pointer.pointee.captureDescription.pointee.metadataSourceRecordBuffer()
+        return buffer.forEachPointer {
+            let type = MangledTypeName($0.pointee.mangledTypeName.advanced())
+            let source = UnsafeRawPointer($0.pointee.mangledMetadataSource.advanced())
+            return (type, source)
+        }
     }
     
-    var types:[Any.Type] {
-        return _mangedTypeNames.map {
+    var types: [Any.Type] {
+        return capturedTypes.map {
             return $0.type(genericContext: nil, genericArguments: nil)
         }
+    }
+
+    func fields() throws -> [(Int, Any.Type)] {
+        var offset = Int(self.offsetToFirstCapture)
+        offset += MemoryLayout<Any.Type>.size * Int(self.numBindings)
+
+        var res: [(Int, Any.Type)] = []
+        for type in self.types {
+            var effectiveType = type
+            if Kind(type: type) == .opaque {
+                effectiveType = ByRefMirror.self
+            }
+            let info = try metadata(of: effectiveType)
+            let alignedOffset = (offset + info.alignment - 1) & ~(info.alignment - 1)
+            res.append((alignedOffset, effectiveType))
+            offset = alignedOffset + info.size
+        }
+        return res
     }
 }

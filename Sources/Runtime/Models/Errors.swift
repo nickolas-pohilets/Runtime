@@ -30,4 +30,5 @@ enum RuntimeError: Error {
     case errorGettingValue(name: String, type: Any.Type)
     case unknownCallingConvention(type: Any.Type, value: Int)
     case unsupportedCallingConvention(function: Any, callingConvention: CallingConvention)
+    case unexpectedByRefLayout(type: Any.Type)
 }

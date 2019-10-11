@@ -45,8 +45,15 @@ struct CaptureDescriptor {
         let n = Int(numCaptureTypes)
         return withUnsafePointer(to: &self) { (ptr: UnsafePointer<CaptureDescriptor>) in
             let start = ptr.advanced(by: 1).raw.assumingMemoryBound(to: CaptureTypeRecord.self)
-            return UnsafeMutableBufferPointer<CaptureTypeRecord>(start: start.mutable, count: n)
+            return UnsafeMutableBufferPointer(start: start.mutable, count: n)
         }
+    }
+
+    mutating func metadataSourceRecordBuffer() -> UnsafeMutableBufferPointer<MetadataSourceRecord> {
+        let captureBuffer = self.captureTypeRecordBuffer()
+        let captureEnd = captureBuffer.baseAddress!.advanced(by: captureBuffer.count)
+        let base = captureEnd.raw.assumingMemoryBound(to: MetadataSourceRecord.self)
+        return UnsafeMutableBufferPointer(start: base, count: Int(self.numMetadataSources))
     }
 }
 

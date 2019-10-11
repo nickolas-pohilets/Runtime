@@ -22,11 +22,46 @@
 
 import Foundation
 
-struct HeapObject {
+public struct ByRefMirror: Hashable {
+    // TODO: Ideally this should be Builtin.NativeObject to have proper reference counting
+    // Note that this cannot be AnyObject, which also does some ObjC checks and crashes there.
+    private var ptr: UnsafeRawPointer
+
+    public func type() throws -> Any.Type {
+        return try self.field().1
+    }
+
+    public func value() throws -> Any {
+        let (ptr, type) = try self.field()
+        return getters(type: type).get(from: ptr)
+    }
+
+    public func setValue(_ value: Any) throws {
+        let (ptr, type) = try self.field()
+        setters(type: type).set(value: value, pointer: UnsafeMutableRawPointer(mutating: ptr))
+    }
+
+    private func field() throws -> (UnsafeRawPointer, Any.Type) {
+        let type = self.ptr.assumingMemoryBound(to: HeapObject.self).pointee.md
+        if Kind(type: type) != .heapLocalVariable {
+            throw RuntimeError.unexpectedByRefLayout(type: type)
+        }
+        let md = HeapLocalVariableMetadata(type: type)
+        let fields = try md.fields()
+        if fields.count != 1 {
+            throw RuntimeError.unexpectedByRefLayout(type: md.type)
+        }
+        let (offset, fieldType) = fields[0]
+        let ptr = self.ptr.advanced(by: offset)
+        return (ptr, fieldType)
+    }
+}
+
+private struct HeapObject {
     var md: Any.Type
 }
 
-struct SwiftFunction {
+private struct SwiftFunction {
     var f: @convention(c) (AnyObject) -> Void
     var ctx: UnsafePointer<HeapObject>?
 }
@@ -60,16 +95,12 @@ public struct FunctionMirror {
             let kind = Kind(type: type)
             assert(kind == .heapLocalVariable)
             let md = HeapLocalVariableMetadata(type: type)
-            var offset = Int(md.offsetToFirstCapture)
-            for type in md.types {
-                let info = try metadata(of: type)
-                let getter = getters(type: type)
 
-                offset = (offset + info.alignment - 1) & ~(info.alignment - 1)
+            for (offset, type) in try md.fields() {
                 let fieldPtr = ctx.raw.advanced(by: offset)
+                let getter = getters(type: type)
                 let value = getter.get(from: fieldPtr)
                 values.append(value)
-                offset += info.size
             }
         }
 
