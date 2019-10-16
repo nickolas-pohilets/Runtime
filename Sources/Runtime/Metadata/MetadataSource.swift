@@ -36,61 +36,43 @@ indirect enum MetadataSource: Hashable {
 }
 
 extension MetadataSource {
-    private static func decodeNatural(ptr: inout UnsafePointer<UInt8>) -> Int? {
-        var value = 0
-        while ptr.pointee >= UnicodeScalar("0").value && ptr.pointee <= UnicodeScalar("9").value {
-            let digit = Int(UInt32(ptr.pointee) - UnicodeScalar("0").value)
-            ptr = ptr.advanced(by: 1)
-            if value > (Int.max - digit) / 10 {
-                // Overflow
-                return nil
-            }
-            value = value * 10 + digit
-        }
-        return value
-    }
-
-    private static func decodeClosureBinding(ptr: inout UnsafePointer<UInt8>) -> MetadataSource? {
-        guard let index = decodeNatural(ptr: &ptr) else { return nil }
+    private static func decodeClosureBinding(scanner: inout ByteScanner) -> MetadataSource? {
+        guard let index = scanner.scanNatural() else { return nil }
         return .closureBinding(index: index)
     }
 
-    private static func decodeReferenceCapture(ptr: inout UnsafePointer<UInt8>) -> MetadataSource? {
-        guard let index = decodeNatural(ptr: &ptr) else { return nil }
+    private static func decodeReferenceCapture(scanner: inout ByteScanner) -> MetadataSource? {
+        guard let index = scanner.scanNatural() else { return nil }
         return .referenceCapture(index: index)
     }
 
-    private static func decodeMetadataCapture(ptr: inout UnsafePointer<UInt8>) -> MetadataSource? {
-        guard let index = decodeNatural(ptr: &ptr) else { return nil }
+    private static func decodeMetadataCapture(scanner: inout ByteScanner) -> MetadataSource? {
+        guard let index = scanner.scanNatural() else { return nil }
         return .metadataCapture(index: index)
     }
 
-    private static func decodeGenericArgument(ptr: inout UnsafePointer<UInt8>) -> MetadataSource? {
-        guard let index = decodeNatural(ptr: &ptr) else { return nil }
-        guard let base = decode(ptr: &ptr) else { return nil }
-        if ptr.pointee != UnicodeScalar("_").value { return nil }
-        ptr = ptr.advanced(by: 1)
+    private static func decodeGenericArgument(scanner: inout ByteScanner) -> MetadataSource? {
+        guard let index = scanner.scanNatural() else { return nil }
+        guard let base = decode(scanner: &scanner) else { return nil }
+        if !scanner.scan(scalar: "_") { return nil }
         return .genericArgument(index: index, base: base)
     }
 
-    public static func decode(ptr: inout UnsafePointer<UInt8>) -> MetadataSource? {
-        let current = ptr.pointee
-        ptr = ptr.advanced(by: 1)
-        switch UInt32(current) {
-            case UnicodeScalar("B").value: return decodeClosureBinding(ptr: &ptr)
-            case UnicodeScalar("R").value: return decodeReferenceCapture(ptr: &ptr)
-            case UnicodeScalar("M").value: return decodeMetadataCapture(ptr: &ptr)
-            case UnicodeScalar("G").value: return decodeGenericArgument(ptr: &ptr)
-            case UnicodeScalar("S").value: return .`self`
+    public static func decode(scanner: inout ByteScanner) -> MetadataSource? {
+        switch scanner.scanScalar() {
+            case "B": return decodeClosureBinding(scanner: &scanner)
+            case "R": return decodeReferenceCapture(scanner: &scanner)
+            case "M": return decodeMetadataCapture(scanner: &scanner)
+            case "G": return decodeGenericArgument(scanner: &scanner)
+            case "S": return .`self`
             default: return nil
         }
     }
 
-    public init(ptr: UnsafeRawPointer) throws {
-        var ptrCopy = ptr.assumingMemoryBound(to: UInt8.self)
-        guard let source = Self.decode(ptr: &ptrCopy), ptrCopy.pointee == 0 else {
-            let str = String(utf8String: ptr.assumingMemoryBound(to: CChar.self))!
-            throw RuntimeError.unexpectedMetadataSource(source: str)
+    public init(buffer: UnsafeBufferPointer<UInt8>) throws {
+        var scanner = ByteScanner(buffer: buffer)
+        guard let source = Self.decode(scanner: &scanner), scanner.atEnd() else {
+            throw RuntimeError.unexpectedMetadataSource(buffer: buffer)
         }
         self = source
     }
@@ -98,7 +80,7 @@ extension MetadataSource {
     public init(string: String) throws {
         var stringCopy = string
         self = try stringCopy.withUTF8 {
-            try Self(ptr: $0.baseAddress!.raw)
+            try Self(buffer: $0)
         }
     }
 }

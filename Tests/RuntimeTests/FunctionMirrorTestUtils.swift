@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2017 Wesley Wickwire
+// Copyright (c) 2019 Mykola Pokhylets
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,17 +20,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
+import XCTest
+@testable import Runtime
 
-enum RuntimeError: Error {
-    case couldNotGetTypeInfo(type: Any.Type, kind: Kind)
-    case couldNotGetPointer(type: Any.Type, value: Any)
-    case noPropertyNamed(name: String)
-    case unableToBuildType(type: Any.Type)
-    case errorGettingValue(name: String, type: Any.Type)
-    case unknownCallingConvention(type: Any.Type, value: Int)
-    case unsupportedCallingConvention(function: Any, callingConvention: CallingConvention)
-    case unexpectedByRefLayout(type: Any.Type)
-    case unexpectedGenericParam(buffer: UnsafeBufferPointer<UInt8>)
-    case unexpectedMetadataSource(buffer: UnsafeBufferPointer<UInt8>)
+func XCTAssertAnyEqual(_ lhs: Any, _ rhs: Any, _ message: String = "", file: StaticString = #file, line: UInt = #line) {
+    if (lhs as! AnyHashable) != (rhs as! AnyHashable) {
+        XCTFail(message, file: file, line: line)
+    }
+}
+
+func XCTAssertTypeEqual(_ lhs: Any.Type, _ rhs: Any.Type, _ message: String = "", file: StaticString = #file, line: UInt = #line) {
+    if unsafeBitCast(lhs, to: UnsafeRawPointer.self) != unsafeBitCast(rhs, to: UnsafeRawPointer.self) {
+        XCTFail(message, file: file, line: line)
+    }
+}
+
+func mirror(reflecting f: Any) throws -> FunctionMirror {
+    let m = try FunctionMirror(reflecting: f)
+    if m.capturedValues.count == 1 {
+        let value = m.capturedValues[0]
+        let info = try metadata(of: type(of: value))
+        if info.kind == .function {
+            return try FunctionMirror(reflecting: value)
+        }
+    }
+    return m
 }

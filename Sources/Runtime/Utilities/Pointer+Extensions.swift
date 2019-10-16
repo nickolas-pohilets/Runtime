@@ -69,3 +69,27 @@ extension UnsafeMutablePointer {
         return self.raw.advanced(by: n * wordSize)
     }
 }
+
+extension UnsafeBufferPointer where Element: Hashable, Element: ExpressibleByIntegerLiteral {
+    init(nullTerminated start: UnsafePointer<Element>?) {
+        if let start = start {
+            let end = start.advance(to: 0)
+            let count = start.distance(to: end)
+            self.init(start: start, count: count)
+        } else {
+            self.init(start: nil, count: 0)
+        }
+    }
+}
+
+extension UnsafeMutableBufferPointer {
+    func forEachPointer<T>(_ block: (UnsafeMutablePointer<Element>) throws -> T) rethrows -> [T] {
+        var buffer = self
+        var res: [T] = []
+        while !buffer.isEmpty {
+            res.append(try block(buffer.baseAddress!))
+            buffer = UnsafeMutableBufferPointer(rebasing: buffer.dropFirst())
+        }
+        return res
+    }
+}

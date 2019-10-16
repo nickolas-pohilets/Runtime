@@ -41,45 +41,9 @@ fileprivate class MyClass {
     }
 }
 
-func XCTAssertAnyEqual(_ lhs: Any, _ rhs: Any, _ message: String = "", file: StaticString = #file, line: UInt = #line) {
-    if (lhs as! AnyHashable) != (rhs as! AnyHashable) {
-        XCTFail(message, file: file, line: line)
-    }
-}
-
-func XCTAssertTypeEqual(_ lhs: Any.Type, _ rhs: Any.Type, _ message: String = "", file: StaticString = #file, line: UInt = #line) {
-    if unsafeBitCast(lhs, to: UnsafeRawPointer.self) != unsafeBitCast(rhs, to: UnsafeRawPointer.self) {
-        XCTFail(message, file: file, line: line)
-    }
-}
-
 struct ArrayAndInt: Hashable {
     var a: [String]
     var b: Int
-}
-
-private extension Hashable {
-    func makeGeneric() -> () -> Void {
-        return { print(self) }
-    }
-}
-
-class GenericProvider<T: Hashable> {
-    let x: T
-
-    init(x: T) {
-        self.x = x
-    }
-
-    func makeGeneric(_ y: T) -> () -> Void {
-        return {
-            if (self.x == y) {
-                print("equal")
-            } else {
-                print("not equal")
-            }
-        }
-    }
 }
 
 class FunctionMirrorTests: XCTestCase {
@@ -104,6 +68,10 @@ class FunctionMirrorTests: XCTestCase {
 
     private func makeStruct(_ s: MyStruct) -> () -> Void {
         return { print(s) }
+    }
+
+    private func makeAny(_ x: Any) -> () -> Void {
+        return { print(x) }
     }
 
     private func makeMethod(_ value: String) -> () -> Void {
@@ -138,42 +106,6 @@ class FunctionMirrorTests: XCTestCase {
         return (f1, f2)
     }
 
-    private func makeGeneric<T: Hashable, U: Hashable>(x: T, y: U) -> () -> Void {
-        return { print(x, y) }
-    }
-
-    private func makeGeneric2<T: Hashable>(x: T) -> () -> Void {
-        let y: [T] = [x, x]
-        let z: T? = nil
-        return { print(x, y, z as Any) }
-    }
-
-    struct Foo<T: Hashable, U: Hashable>: Hashable {
-        var x: T
-        var y: U
-    }
-
-    private func makeGenericStruct<T: Hashable, U: Hashable>(x: T, y: U) -> Any {
-        return Foo(x: x, y: y)
-    }
-
-    private func makeGenericMD<T>(type: T.Type) -> () -> Void {
-        let x: [T] = []
-        return { print(type, x) }
-    }
-
-    func mirror(reflecting f: Any) throws -> FunctionMirror {
-        let m = try FunctionMirror(reflecting: f)
-        if m.capturedValues.count == 1 {
-            let value = m.capturedValues[0]
-            let info = try metadata(of: type(of: value))
-            if info.kind == .function {
-                return try FunctionMirror(reflecting: value)
-            }
-        }
-        return m
-    }
-
     func testEmpty() throws {
         let f = makeEmptyFunc()
         let m = try mirror(reflecting: f)
@@ -204,6 +136,42 @@ class FunctionMirrorTests: XCTestCase {
         let m = try mirror(reflecting: f)
         XCTAssertEqual(m.capturedValues.count, 1)
         XCTAssertEqual(m.capturedValues[0] as? MyStruct, s)
+    }
+
+    func testAny() throws {
+        do {
+            let f = makeAny(42)
+            let m = try mirror(reflecting: f)
+            XCTAssertEqual(m.capturedValues.count, 1)
+            XCTAssertEqual(m.capturedValues[0] as? Int, 42)
+        }
+        do {
+            let f = makeAny("abc")
+            let m = try mirror(reflecting: f)
+            XCTAssertEqual(m.capturedValues.count, 1)
+            XCTAssertEqual(m.capturedValues[0] as? String, "abc")
+        }
+        do {
+            let x = [true, false, nil]
+            let f = makeAny(x)
+            let m = try mirror(reflecting: f)
+            XCTAssertEqual(m.capturedValues.count, 1)
+            XCTAssertEqual(m.capturedValues[0] as? [Bool?], x)
+        }
+        do {
+            let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
+            let f = makeAny(s)
+            let m = try mirror(reflecting: f)
+            XCTAssertEqual(m.capturedValues.count, 1)
+            XCTAssertEqual(m.capturedValues[0] as? MyStruct, s)
+        }
+        do {
+            let c = MyClass(value: "abc")
+            let f = makeAny(c)
+            let m = try mirror(reflecting: f)
+            XCTAssertEqual(m.capturedValues.count, 1)
+            XCTAssert(m.capturedValues[0] as? MyClass === c)
+        }
     }
 
     func testMethod() throws {
@@ -283,66 +251,5 @@ class FunctionMirrorTests: XCTestCase {
         try r21.setValue(["xyz"] as [String])
         try r22.setValue(1)
         XCTAssertEqual(f2(), ArrayAndInt(a: ["xyz", "zop"], b: 6))
-    }
-
-    func testMetadataSource() {
-        XCTAssertEqual(try MetadataSource(string: "B1"), MetadataSource.closureBinding(index: 1))
-        XCTAssertEqual(try MetadataSource(string: "R0"), MetadataSource.referenceCapture(index: 0))
-        XCTAssertEqual(try MetadataSource(string: "M106"), MetadataSource.metadataCapture(index: 106))
-        XCTAssertEqual(try MetadataSource(string: "G0R1_"), MetadataSource.genericArgument(index: 0, base: .referenceCapture(index: 1)))
-        XCTAssertEqual(try MetadataSource(string: "S"), MetadataSource.`self`)
-    }
-
-    func testGeneric() throws {
-        let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
-//        let g = makeGenericStruct(x: [s], y: s)
-//        let ti = try typeInfo(of: type(of: g))
-//        print(ti)
-
-        // Case 1
-        //  types:
-        //    "xz_x_q_SHRzSHR_r0_lXX"
-        //    "q_z_x_q_SHRzSHR_r0_lXX"
-        //  sources:
-        //    "x" -> B0
-        //    "q_" -> B1
-        //let f = makeGeneric(x: [s], y: s)
-
-        // Case 2:
-        //  types:
-        //    "xz_x_SHRzlXX"
-        //    "SayxG"
-        //    "xSgz_x_SHRzlXX"
-        //  sources:
-        //    "x" -> B0
-        //let f = makeGeneric2(x: s)
-
-        // Case 3:
-        //  types:
-        //     "xz_x_SHRzlXX"
-        //  sources:
-        //     "x" -> "B0"
-        // let f = s.makeGeneric()
-
-        // Case 4:
-        //  types:
-        //    {01:0xfffffe84800000d0}yxG
-        //    xz_x_SHRzlXX
-        //  sources:
-        //     "x" -> "G0R0_"
-        //     no bindings
-        //let f = GenericProvider<String>(x: "abc").makeGeneric("xyz")
-
-        //  'B' -> ClosureBinding
-        //  'R' -> ReferenceCapture
-        //  'M' -> MetadataCapture
-        //  'G' -> GenericArgument
-        //  'S' -> Self
-        //let f = makeGenericMD(type: MyStruct.self)
-        let f = makeGeneric(x: 0xaaaaaaaaaaaa, y: 0xbbbbbbbbbbbb)
-        let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 2)
-        XCTAssertEqual(m.capturedValues[0] as? [MyStruct], [s])
-        XCTAssertEqual(m.capturedValues[1] as? MyStruct, s)
     }
 }

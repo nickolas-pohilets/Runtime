@@ -23,18 +23,6 @@
 import Foundation
 import CRuntime
 
-extension UnsafeMutableBufferPointer {
-    func forEachPointer<T>(_ block: (UnsafeMutablePointer<Element>) throws -> T) rethrows -> [T] {
-        var buffer = self
-        var res: [T] = []
-        while !buffer.isEmpty {
-            res.append(try block(buffer.baseAddress!))
-            buffer = UnsafeMutableBufferPointer(rebasing: buffer.dropFirst())
-        }
-        return res
-    }
-}
-
 struct HeapLocalVariableMetadata {
     var pointer: UnsafeMutablePointer<HeapLocalVariableMetadataLayout>
     init(type: Any.Type) {
@@ -64,13 +52,14 @@ struct HeapLocalVariableMetadata {
         }
     }
 
-    private func metadataSources() throws -> [(MangledTypeName, MetadataSource)] {
+    private func metadataSources() throws -> [(GenericParam, MetadataSource)] {
         let buffer = self.pointer.pointee.captureDescription.pointee.metadataSourceRecordBuffer()
         return try buffer.forEachPointer {
             let type = MangledTypeName($0.pointee.mangledTypeName.advanced())
-            let encodedSource = UnsafeRawPointer($0.pointee.mangledMetadataSource.advanced())
-            let source = try MetadataSource(ptr: encodedSource)
-            return (type, source)
+            let param = try GenericParam(typeName: type)
+            let encodedSource = $0.pointee.mangledMetadataSource.advanced()
+            let source = try MetadataSource(buffer: UnsafeBufferPointer(nullTerminated: encodedSource))
+            return (param, source)
         }
     }
     

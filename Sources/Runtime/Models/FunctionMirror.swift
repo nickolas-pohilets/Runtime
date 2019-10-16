@@ -43,17 +43,23 @@ public struct ByRefMirror: Hashable {
 
     private func field() throws -> (UnsafeRawPointer, Any.Type) {
         let type = self.ptr.assumingMemoryBound(to: HeapObject.self).pointee.md
-        if Kind(type: type) != .heapLocalVariable {
+        switch Kind(type: type) {
+        case .heapLocalVariable:
+            let md = HeapLocalVariableMetadata(type: type)
+            let fields = try md.fields()
+            if fields.count != 1 {
+                throw RuntimeError.unexpectedByRefLayout(type: md.type)
+            }
+            let (offset, fieldType) = fields[0]
+            let ptr = self.ptr.advanced(by: offset)
+            return (ptr, fieldType)
+        case .heapGenericLocalVariable:
+            let md = HeapGenericLocalVariableMetadata(type: type)
+            let ptr = self.ptr.advanced(by: md.valueOffset)
+            return (ptr, md.valueType)
+        default:
             throw RuntimeError.unexpectedByRefLayout(type: type)
         }
-        let md = HeapLocalVariableMetadata(type: type)
-        let fields = try md.fields()
-        if fields.count != 1 {
-            throw RuntimeError.unexpectedByRefLayout(type: md.type)
-        }
-        let (offset, fieldType) = fields[0]
-        let ptr = self.ptr.advanced(by: offset)
-        return (ptr, fieldType)
     }
 }
 

@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2017 Wesley Wickwire
+// Copyright (c) 2019 Mykola Pokhylets
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,15 +22,25 @@
 
 import Foundation
 
-enum RuntimeError: Error {
-    case couldNotGetTypeInfo(type: Any.Type, kind: Kind)
-    case couldNotGetPointer(type: Any.Type, value: Any)
-    case noPropertyNamed(name: String)
-    case unableToBuildType(type: Any.Type)
-    case errorGettingValue(name: String, type: Any.Type)
-    case unknownCallingConvention(type: Any.Type, value: Int)
-    case unsupportedCallingConvention(function: Any, callingConvention: CallingConvention)
-    case unexpectedByRefLayout(type: Any.Type)
-    case unexpectedGenericParam(buffer: UnsafeBufferPointer<UInt8>)
-    case unexpectedMetadataSource(buffer: UnsafeBufferPointer<UInt8>)
+struct HeapGenericLocalVariableMetadata {
+    var pointer: UnsafeMutablePointer<HeapGenericLocalVariableMetadataLayout>
+    init(type: Any.Type) {
+        self.pointer = unsafeBitCast(type, to: UnsafeMutablePointer<HeapGenericLocalVariableMetadataLayout>.self)
+    }
+
+    var type: Any.Type {
+        return unsafeBitCast(pointer, to: Any.Type.self)
+    }
+
+    var kind: Kind {
+        return Kind(flag: pointer.pointee._kind)
+    }
+
+    var valueOffset: Int {
+        return Int(pointer.pointee.offset)
+    }
+
+    var valueType: Any.Type {
+        return pointer.pointee.type
+    }
 }
