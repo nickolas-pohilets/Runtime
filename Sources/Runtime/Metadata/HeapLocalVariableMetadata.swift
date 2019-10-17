@@ -37,22 +37,22 @@ struct HeapLocalVariableMetadata {
         return Kind(flag: pointer.pointee._kind)
     }
 
-    var offsetToFirstCapture: UInt32 {
-        return pointer.pointee.offsetToFirstCapture
+    var offsetToFirstCapture: Int {
+        return Int(pointer.pointee.offsetToFirstCapture)
     }
 
-    var numBindings: UInt32 {
-        return pointer.pointee.captureDescription.pointee.numBindings
+    var numBindings: Int {
+        return Int(pointer.pointee.captureDescription.pointee.numBindings)
     }
 
-    private func capturedTypes() -> [MangledTypeName] {
+    func capturedTypes() -> [MangledTypeName] {
         let buffer = self.pointer.pointee.captureDescription.pointee.captureTypeRecordBuffer()
         return buffer.forEachPointer {
             MangledTypeName($0.pointee.mangledTypeName.advanced())
         }
     }
 
-    private func metadataSources() throws -> [(GenericParam, MetadataSource)] {
+    func metadataSources() throws -> [(GenericParam, MetadataSource)] {
         let buffer = self.pointer.pointee.captureDescription.pointee.metadataSourceRecordBuffer()
         return try buffer.forEachPointer {
             let type = MangledTypeName($0.pointee.mangledTypeName.advanced())
@@ -74,7 +74,7 @@ struct HeapLocalVariableMetadata {
     }
 
     func fields() throws -> [(Int, Any.Type)] {
-        var offset = Int(self.offsetToFirstCapture)
+        var offset = self.offsetToFirstCapture
         offset += MemoryLayout<Any.Type>.size * Int(self.numBindings)
 
         var res: [(Int, Any.Type)] = []

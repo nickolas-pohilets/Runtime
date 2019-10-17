@@ -102,16 +102,138 @@ public struct FunctionMirror {
             assert(kind == .heapLocalVariable)
             let md = HeapLocalVariableMetadata(type: type)
 
-            for (offset, type) in try md.fields() {
-                let fieldPtr = ctx.raw.advanced(by: offset)
-                let getter = getters(type: type)
-                let value = getter.get(from: fieldPtr)
-                values.append(value)
-            }
+            var offset = md.offsetToFirstCapture
+            offset += MemoryLayout<Any.Type>.size * md.numBindings
+
+            let bindingsPtr = ctx.raw.advanced(by: md.offsetToFirstCapture).assumingMemoryBound(to: Any.Type.self)
+            let bindings = UnsafeBufferPointer(start: bindingsPtr, count: Int(md.numBindings))
+            let metadataSources = try md.metadataSources()
+            let types = md.capturedTypes()
+            values = try FunctionMirror.buildValues(
+                ctx: ctx,
+                offset: offset,
+                bindings: bindings,
+                metadataSources: metadataSources,
+                types: types
+            )
         }
 
         self.function = funcPtr!
         self.context = ctxPtr
         self.capturedValues = values
+    }
+
+    static func buildValues(
+        ctx: UnsafeRawPointer,
+        offset: Int,
+        bindings: UnsafeBufferPointer<Any.Type>,
+        metadataSources: [(GenericParam, MetadataSource)],
+        types: [MangledTypeName]
+    ) throws -> [Any] {
+        let levelsCount = metadataSources.map { $0.0.depth }.max().map { $0 + 1} ?? 0
+        var counts = Array<Int>(repeating: 0, count: levelsCount)
+        for (param, _) in metadataSources {
+            counts[param.depth] = max(counts[param.depth], param.index + 1)
+        }
+        var indices: [GenericParam: Int] = [:]
+        var totalCount = 0
+        for (i, x) in counts.enumerated() {
+            for j in 0..<x {
+                indices[GenericParam(depth: i, index: j)] = indices.count
+            }
+            totalCount += x
+            counts[i] = totalCount
+        }
+
+        let requirementsCount = 0;
+
+        // See TargetGenericEnvironment<> and IRGenModule::getAddrOfGenericEnvironment()
+        // Layout of the environment data structure:
+        // - flags: 32 bit
+        //    - number of levels: 12 bit
+        //    - number of requirements: 12 bit
+        //    - reserved: 8 bit
+        // - running counts of generic params per level
+        //    - number of levels x 16 bit
+        // - generic params
+        //    - total number of params x 8 bit
+        //       - kind: 6 bit
+        //          - 0 = type
+        //          - other - reserved
+        //      - hasExtraArgument: 1 bit - always false
+        //      - hasKeyArgument: 1 bit - true if generic parameter cannot deduced from same type requirements - see GenericSignatureImpl::forEachParam()
+        // - generic requirements
+        //    - number of requirements x 64 bit
+        //       - flags: 32 bit
+        //          - kind: 6 bit
+        //             - 0 = protocol requirement
+        //             - 1 = same-type requirement
+        //             - 2 = base class requirement
+        //             - 3 = same conformance
+        //             - 0x1F = a layout constraint
+        //          - hasExtraArgument: 1 bit
+        //          - hasKeyArgument: 1 bit
+        //       - relative offset to param: 16 bit
+        //       - kind-specific payload: 16 bit
+        let envSize = 4 + 2 * levelsCount + 1 * totalCount + 8 * requirementsCount;
+        let envPtr = UnsafeMutableRawPointer.allocate(byteCount: envSize, alignment: 16)
+        defer { envPtr.deallocate() }
+
+        var ptr = envPtr
+        ptr.assumingMemoryBound(to: UInt32.self).pointee = UInt32(levelsCount) | (UInt32(requirementsCount) << 12)
+        ptr = ptr.advanced(by: 4)
+
+        for k in counts {
+            ptr.assumingMemoryBound(to: UInt16.self).pointee = UInt16(k)
+            ptr = ptr.advanced(by: 2)
+        }
+
+        for _ in 0..<totalCount {
+            ptr.assumingMemoryBound(to: UInt8.self).pointee = 0x80
+            ptr = ptr.advanced(by: 1)
+        }
+
+        let argsPtr = UnsafeMutablePointer<Any.Type?>.allocate(capacity: totalCount)
+        defer { argsPtr.deallocate() }
+        for i in 0..<totalCount {
+            argsPtr.advanced(by: i).initialize(to: nil)
+        }
+
+        var captureIndicesAffectingMetadata = Set<Int>()
+        for (param, source) in metadataSources {
+            if let captureIndex = source.captureIndex {
+                captureIndicesAffectingMetadata.insert(captureIndex)
+            }
+            let md = source.resolve(bindings: bindings, values: [])
+            let index = indices[param]!
+            argsPtr.advanced(by: index).pointee = md
+        }
+
+        var values: [Any] = []
+        var fieldOffset = offset
+        for (i, mangledType) in types.enumerated() {
+            let type = mangledType.type(genericEnvironment: envPtr, genericArguments: argsPtr)
+            var effectiveType = type
+            if Kind(type: type) == .opaque {
+                effectiveType = ByRefMirror.self
+            }
+            let info = try metadata(of: effectiveType)
+            let alignedOffset = (fieldOffset + info.alignment - 1) & ~(info.alignment - 1)
+            fieldOffset = alignedOffset + info.size
+
+            let fieldPtr = ctx.advanced(by: alignedOffset)
+            let getter = getters(type: effectiveType)
+            let value = getter.get(from: fieldPtr)
+            values.append(value)
+
+            if captureIndicesAffectingMetadata.contains(i) {
+                for (param, source) in metadataSources {
+                   let md = source.resolve(bindings: bindings, values: values)
+                   let index = indices[param]!
+                   argsPtr.advanced(by: index).pointee = md
+               }
+            }
+        }
+        return values
     }
 }

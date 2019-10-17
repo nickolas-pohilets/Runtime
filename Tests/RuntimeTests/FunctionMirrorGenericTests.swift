@@ -43,7 +43,7 @@ fileprivate class GenericClass<T: Foo, U: Foo> where T.Result == U.Result, T.Res
     }
 }
 
-fileprivate struct GenericStruct<T: Foo, U: Hashable> {
+fileprivate struct GenericStruct<T: Foo & Hashable, U: Hashable> : Hashable {
     var x: T
     var y: U
 }
@@ -104,9 +104,9 @@ class FunctionMirrorGenericTests: XCTestCase {
     private func makeCaptureMiscSpecializedGenerics<T: Foo & Hashable>(x: T) -> () -> Void where T.Result: Hashable {
         let a: [T] = [x, x]
         let b: T? = nil
-        let c: GenericClass<T, T> = GenericClass(a: x, b: x)
+//        let c: GenericClass<T, T> = GenericClass(a: x, b: x)
         let d: GenericStruct<T, T> = GenericStruct(x: x, y: x)
-        return { print(x, a, b as Any, c, d) }
+        return { print(x, a, b as Any, d) }
     }
 
     private func makeCaptureGenericType<T: DefaultConstructor>(type: T.Type) -> () -> Void {
@@ -125,10 +125,6 @@ class FunctionMirrorGenericTests: XCTestCase {
         }
     }
 
-    private func cast<T>(_ from: Any, to: T.Type) -> T? {
-        return from as? T
-    }
-
     func testCaptureValuesOfManyTypes() throws {
         let f = makeCaptureValuesOfManyTypes(x: 42, y: "abc", z: (nil as ObjectIdentifier?))
         let m = try mirror(reflecting: f)
@@ -145,7 +141,11 @@ class FunctionMirrorGenericTests: XCTestCase {
         let x = Z(value: "abc")
         let f = makeCaptureMiscSpecializedGenerics(x: x)
         let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 5)
+        XCTAssertEqual(m.capturedValues.count, 4)
+        XCTAssertEqual(try? (m.capturedValues[0] as? ByRefMirror)?.value() as? Z, x)
+        XCTAssertEqual(m.capturedValues[1] as? [Z], [x, x])
+        XCTAssertEqual(cast(try (m.capturedValues[2] as! ByRefMirror).value(), to: Z?.self), Z??.some(nil))
+        XCTAssertEqual(try? (m.capturedValues[3] as? ByRefMirror)?.value() as? GenericStruct<Z, Z>, GenericStruct(x: x, y: x))
     }
 
     func testCaptureDeepGenerics() throws {

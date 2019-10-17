@@ -23,6 +23,13 @@
 import XCTest
 @testable import Runtime
 
+// Swift refuses to perform condition cast to optional types
+// But if it does not know that destination type is an optional type, that it can
+// Note that this returns double optional
+func cast<T>(_ from: Any, to: T.Type) -> T? {
+    return from as? T
+}
+
 func XCTAssertAnyEqual(_ lhs: Any, _ rhs: Any, _ message: String = "", file: StaticString = #file, line: UInt = #line) {
     if (lhs as! AnyHashable) != (rhs as! AnyHashable) {
         XCTFail(message, file: file, line: line)

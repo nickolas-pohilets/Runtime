@@ -61,6 +61,20 @@ struct MangledTypeName: CustomStringConvertible {
         return unsafeBitCast(metadataPtr, to: Any.Type.self)
     }
 
+    func type(genericEnvironment: UnsafeRawPointer?, genericArguments: UnsafeRawPointer?) -> Any.Type {
+        let buf = self.buffer
+        if buf.count == 2 && buf[0] == 66 && buf[1] == 112 { // "Bp"
+            return UnsafeRawPointer.self
+        }
+        let metadataPtr = swift_getTypeByMangledNameInEnvironment(
+            self.base.raw.assumingMemoryBound(to: Int8.self),
+            self.length,
+            genericEnvironment,
+            genericArguments?.assumingMemoryBound(to: Optional<UnsafeRawPointer>.self)
+        )!
+        return unsafeBitCast(metadataPtr, to: Any.Type.self)
+    }
+
     var description: String {
         var res = ""
 

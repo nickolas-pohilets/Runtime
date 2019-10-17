@@ -84,3 +84,53 @@ extension MetadataSource {
         }
     }
 }
+
+extension MetadataSource {
+    var captureIndex: Int? {
+        switch self {
+        case .closureBinding(_):
+            return nil
+        case let .referenceCapture(index):
+            return index
+        case let .metadataCapture(index):
+            return index
+        case let .genericArgument(_, base):
+            return base.captureIndex
+        case .`self`:
+            return nil
+        }
+    }
+
+    func resolve(bindings: UnsafeBufferPointer<Any.Type>, values: [Any]) -> Any.Type? {
+        switch self {
+        case let .closureBinding(index):
+            if bindings.count > index {
+                return bindings[index]
+            } else {
+                return nil
+            }
+        case let .referenceCapture(index):
+            if values.count > index {
+                return type(of: values[index])
+            } else {
+                return nil
+            }
+        case let .metadataCapture(index):
+            if values.count > index {
+                return values[index] as? Any.Type
+            } else {
+                return nil
+            }
+        case let .genericArgument(index, base):
+            guard let type = base.resolve(bindings: bindings, values: values) else { return nil }
+            guard let info = try? typeInfo(of: type) else { return nil }
+            if info.genericTypes.count > index {
+                return info.genericTypes[index]
+            } else {
+                return nil
+            }
+        case .`self`:
+            return nil
+        }
+    }
+}
