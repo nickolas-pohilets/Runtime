@@ -56,8 +56,8 @@ struct FieldRecord {
     }
     
     mutating func type(genericContext: UnsafeRawPointer?,
-                       genericArguments: UnsafeRawPointer?) -> Any.Type {
-        return self.mangledTypeName().type(genericContext: genericContext, genericArguments: genericArguments)
+                       genericArguments: UnsafeRawPointer?) throws -> Any.Type {
+        return try self.mangledTypeName().type(genericContext: genericContext, genericArguments: genericArguments)
     }
 }
 

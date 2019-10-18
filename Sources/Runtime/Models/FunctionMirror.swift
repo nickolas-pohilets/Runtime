@@ -212,7 +212,7 @@ public struct FunctionMirror {
         var values: [Any] = []
         var fieldOffset = offset
         for (i, mangledType) in types.enumerated() {
-            let type = mangledType.type(genericEnvironment: envPtr, genericArguments: argsPtr)
+            let type = try mangledType.type(genericEnvironment: envPtr, genericArguments: argsPtr)
             var effectiveType = type
             if Kind(type: type) == .opaque {
                 effectiveType = ByRefMirror.self

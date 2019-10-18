@@ -78,5 +78,5 @@ public func typeInfo(of type: Any.Type) throws -> TypeInfo {
         throw RuntimeError.couldNotGetTypeInfo(type: type, kind: kind)
     }
     
-    return typeInfoConvertible.toTypeInfo()
+    return try typeInfoConvertible.toTypeInfo()
 }

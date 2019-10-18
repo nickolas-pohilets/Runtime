@@ -26,9 +26,9 @@ struct StructMetadata: NominalMetadataType {
     
     var pointer: UnsafeMutablePointer<StructMetadataLayout>
     
-    mutating func toTypeInfo() -> TypeInfo {
+    mutating func toTypeInfo() throws -> TypeInfo {
         var info = TypeInfo(metadata: self)
-        info.properties = properties()
+        info.properties = try properties()
         info.mangledName = mangledName()
         info.genericTypes = genericArguments()
         return info

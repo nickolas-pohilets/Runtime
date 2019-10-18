@@ -33,4 +33,5 @@ enum RuntimeError: Error {
     case unexpectedByRefLayout(type: Any.Type)
     case unexpectedGenericParam(buffer: UnsafeBufferPointer<UInt8>)
     case unexpectedMetadataSource(buffer: UnsafeBufferPointer<UInt8>)
+    case failedToDemangle(type: MangledTypeName)
 }

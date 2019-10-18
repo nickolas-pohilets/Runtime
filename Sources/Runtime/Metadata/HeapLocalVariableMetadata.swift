@@ -68,8 +68,8 @@ struct HeapLocalVariableMetadata {
         print(sources)
         let types = self.capturedTypes()
         print(types.description)
-        return types.map {
-            return $0.type(genericContext: nil, genericArguments: nil)
+        return try types.map {
+            return try $0.type(genericContext: nil, genericArguments: nil)
         }
     }
 

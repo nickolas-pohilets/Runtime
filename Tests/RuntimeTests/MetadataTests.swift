@@ -39,9 +39,9 @@ class MetadataTests: XCTestCase {
         ]
     }
     
-    func testClass() {
+    func testClass() throws {
         var md = ClassMetadata(type: MyClass<Int>.self)
-        let info = md.toTypeInfo()
+        let info = try md.toTypeInfo()
         XCTAssert(md.genericArgumentOffset == 15)
         XCTAssert(info.properties.first {$0.name == "baseProperty"} != nil)
         XCTAssert(info.inheritance[0] == BaseClass.self)
@@ -57,11 +57,11 @@ class MetadataTests: XCTestCase {
         XCTAssert(info.genericTypes[0] == Int.self)
     }
     
-    func testGenericStruct() {
+    func testGenericStruct() throws {
         struct A<B, C, D, E, F, G, H> { let b: B }
         var md = StructMetadata(type: A<Int, String, Bool, Int, Int, Int, Int>.self)
         let args = md.genericArguments()
-        let props = md.properties()
+        let props = try md.properties()
         XCTAssert(args.count == 7)
         XCTAssert(args[0] == Int.self)
         XCTAssert(args[1] == String.self)
@@ -71,14 +71,14 @@ class MetadataTests: XCTestCase {
         XCTAssert(props[0].type == Int.self)
     }
     
-    func testStruct() {
+    func testStruct() throws {
         struct A {
             let a, b, c, d: Int
             var e: Int
         }
         
         var md = StructMetadata(type: A.self)
-        let info = md.toTypeInfo()
+        let info = try md.toTypeInfo()
         XCTAssert(info.genericTypes.count == 0)
         XCTAssert(info.kind == .struct)
         XCTAssert(info.type == A.self)
@@ -91,9 +91,9 @@ class MetadataTests: XCTestCase {
     }
     
     // https://github.com/wickwirew/Runtime/issues/42
-    func testNestedStruct() {
+    func testNestedStruct() throws {
         
-        let nest: () -> Void = {
+        let nest: () throws -> Void = {
             
             struct NestedA {
                 let a, b, c, d: Int
@@ -101,7 +101,7 @@ class MetadataTests: XCTestCase {
             }
             
             var md = StructMetadata(type: NestedA.self)
-            let info = md.toTypeInfo()
+            let info = try md.toTypeInfo()
             XCTAssert(info.genericTypes.count == 0)
             XCTAssert(info.kind == .struct)
             XCTAssert(info.type == NestedA.self)
@@ -113,7 +113,7 @@ class MetadataTests: XCTestCase {
             XCTAssert(info.properties[4].isVar)
         }
         
-        nest()
+        try nest()
     }
     
     func testProtocol() {

@@ -69,16 +69,16 @@ struct ClassMetadata: NominalMetadataType {
         }
     }
     
-    mutating func toTypeInfo() -> TypeInfo {
+    mutating func toTypeInfo() throws -> TypeInfo {
         var info = TypeInfo(metadata: self)
         info.mangledName = mangledName()
-        info.properties = properties()
+        info.properties = try properties()
         info.genericTypes = genericArguments()
         
         var superClass = superClassMetadata()
         while var sc = superClass {
             info.inheritance.append(sc.type)
-            let superInfo = sc.toTypeInfo()
+            let superInfo = try sc.toTypeInfo()
             info.properties.append(contentsOf: superInfo.properties)
             superClass = sc.superClassMetadata()
         }

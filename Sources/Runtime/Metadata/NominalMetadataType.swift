@@ -54,7 +54,7 @@ extension NominalMetadataType {
             .map(numericCast)
     }
     
-    mutating func properties() -> [PropertyInfo] {
+    mutating func properties() throws -> [PropertyInfo] {
         let offsets = fieldOffsets()
         let fieldDescriptor = pointer.pointee.typeDescriptor.pointee
             .fieldDescriptor
@@ -62,7 +62,7 @@ extension NominalMetadataType {
         
         let genericVector = genericArgumentVector()
         
-        return (0..<numberOfFields()).map { i in
+        return try (0..<numberOfFields()).map { i in
             let record = fieldDescriptor
                 .pointee
                 .fields
@@ -70,7 +70,7 @@ extension NominalMetadataType {
             
             return PropertyInfo(
                 name: record.pointee.fieldName(),
-                type: record.pointee.type(
+                type: try record.pointee.type(
                     genericContext: pointer.pointee.typeDescriptor,
                     genericArguments: genericVector.pointee.element(at: 0)
                 ),

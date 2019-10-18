@@ -47,31 +47,35 @@ struct MangledTypeName: CustomStringConvertible {
         return UnsafeBufferPointer<UInt8>(start: self.base, count: Int(self.length))
     }
 
-    func type(genericContext: UnsafeRawPointer?, genericArguments: UnsafeRawPointer?) -> Any.Type {
+    func type(genericContext: UnsafeRawPointer?, genericArguments: UnsafeRawPointer?) throws -> Any.Type {
         let buf = self.buffer
         if buf.count == 2 && buf[0] == 66 && buf[1] == 112 { // "Bp"
             return UnsafeRawPointer.self
         }
-        let metadataPtr = swift_getTypeByMangledNameInContext(
+        guard let metadataPtr = swift_getTypeByMangledNameInContext(
             self.base.raw.assumingMemoryBound(to: Int8.self),
             self.length,
             genericContext,
             genericArguments?.assumingMemoryBound(to: Optional<UnsafeRawPointer>.self)
-        )!
+        ) else {
+            throw RuntimeError.failedToDemangle(type: self)
+        }
         return unsafeBitCast(metadataPtr, to: Any.Type.self)
     }
 
-    func type(genericEnvironment: UnsafeRawPointer?, genericArguments: UnsafeRawPointer?) -> Any.Type {
+    func type(genericEnvironment: UnsafeRawPointer?, genericArguments: UnsafeRawPointer?) throws -> Any.Type {
         let buf = self.buffer
         if buf.count == 2 && buf[0] == 66 && buf[1] == 112 { // "Bp"
             return UnsafeRawPointer.self
         }
-        let metadataPtr = swift_getTypeByMangledNameInEnvironment(
+        guard let metadataPtr = swift_getTypeByMangledNameInEnvironment(
             self.base.raw.assumingMemoryBound(to: Int8.self),
             self.length,
             genericEnvironment,
             genericArguments?.assumingMemoryBound(to: Optional<UnsafeRawPointer>.self)
-        )!
+        ) else {
+            throw RuntimeError.failedToDemangle(type: self)
+        }
         return unsafeBitCast(metadataPtr, to: Any.Type.self)
     }
 
