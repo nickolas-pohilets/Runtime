@@ -30,6 +30,7 @@ enum RuntimeError: Error {
     case errorGettingValue(name: String, type: Any.Type)
     case unknownCallingConvention(type: Any.Type, value: Int)
     case unsupportedCallingConvention(function: Any, callingConvention: CallingConvention)
+    case genericFunctionsAreNotSupported
     case unexpectedByRefLayout(type: Any.Type)
     case unexpectedGenericParam(buffer: UnsafeBufferPointer<UInt8>)
     case unexpectedMetadataSource(buffer: UnsafeBufferPointer<UInt8>)

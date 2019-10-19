@@ -109,81 +109,91 @@ class FunctionMirrorTests: XCTestCase {
     func testEmpty() throws {
         let f = makeEmptyFunc()
         let m = try mirror(reflecting: f)
-        XCTAssert(m.capturedValues.isEmpty)
+        let values = try m.capturedValues()
+        XCTAssert(values.isEmpty)
     }
     
     func testBuiltIn() throws {
         let f = makeBuiltIn(37, "abc", 42, true)
         let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 4)
-        XCTAssertEqual(m.capturedValues[0] as? Bool, true)
-        XCTAssertEqual(m.capturedValues[1] as? Int, 37)
-        XCTAssertEqual(m.capturedValues[2] as? Int, 42)
-        XCTAssertEqual(m.capturedValues[3] as? String, "abc")
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 4)
+        XCTAssertEqual(values[0] as? Bool, true)
+        XCTAssertEqual(values[1] as? Int, 37)
+        XCTAssertEqual(values[2] as? Int, 42)
+        XCTAssertEqual(values[3] as? String, "abc")
     }
 
     func testArray() throws {
         let x = ["abc", "def", "long long long string that would not fit into inline buffer"]
         let f = makeArray(x)
         let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 1)
-        XCTAssertEqual(m.capturedValues[0] as? [String], x)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(values[0] as? [String], x)
     }
 
     func testStruct() throws {
         let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
         let f = makeStruct(s)
         let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 1)
-        XCTAssertEqual(m.capturedValues[0] as? MyStruct, s)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(values[0] as? MyStruct, s)
     }
 
     func testAny() throws {
         do {
             let f = makeAny(42)
             let m = try mirror(reflecting: f)
-            XCTAssertEqual(m.capturedValues.count, 1)
-            XCTAssertEqual(m.capturedValues[0] as? Int, 42)
+            let values = try m.capturedValues()
+            XCTAssertEqual(values.count, 1)
+            XCTAssertEqual(values[0] as? Int, 42)
         }
         do {
             let f = makeAny("abc")
             let m = try mirror(reflecting: f)
-            XCTAssertEqual(m.capturedValues.count, 1)
-            XCTAssertEqual(m.capturedValues[0] as? String, "abc")
+            let values = try m.capturedValues()
+            XCTAssertEqual(values.count, 1)
+            XCTAssertEqual(values[0] as? String, "abc")
         }
         do {
             let x = [true, false, nil]
             let f = makeAny(x)
             let m = try mirror(reflecting: f)
-            XCTAssertEqual(m.capturedValues.count, 1)
-            XCTAssertEqual(m.capturedValues[0] as? [Bool?], x)
+            let values = try m.capturedValues()
+            XCTAssertEqual(values.count, 1)
+            XCTAssertEqual(values[0] as? [Bool?], x)
         }
         do {
             let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
             let f = makeAny(s)
             let m = try mirror(reflecting: f)
-            XCTAssertEqual(m.capturedValues.count, 1)
-            XCTAssertEqual(m.capturedValues[0] as? MyStruct, s)
+            let values = try m.capturedValues()
+            XCTAssertEqual(values.count, 1)
+            XCTAssertEqual(values[0] as? MyStruct, s)
         }
         do {
             let c = MyClass(value: "abc")
             let f = makeAny(c)
             let m = try mirror(reflecting: f)
-            XCTAssertEqual(m.capturedValues.count, 1)
-            XCTAssert(m.capturedValues[0] as? MyClass === c)
+            let values = try m.capturedValues()
+            XCTAssertEqual(values.count, 1)
+            XCTAssert(values[0] as? MyClass === c)
         }
     }
 
     func testMethod() throws {
         let f = makeMethod("hello")
         let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 2)
-        if let obj = m.capturedValues[0] as? MyClass {
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 2)
+        if let obj = values[0] as? MyClass {
             XCTAssertEqual(obj.value, "hello")
         } else {
             XCTFail("Failed to read captured instance")
         }
-        XCTAssert(m.capturedValues[1] is UnsafeRawPointer)
+        XCTAssert(values[1] is UnsafeRawPointer)
     }
 
     func testSharedContext() throws {
@@ -192,26 +202,30 @@ class FunctionMirrorTests: XCTestCase {
         var ctx: UnsafeRawPointer? = nil
         do {
             let m1 = try mirror(reflecting: f1)
+            let values1 = try m1.capturedValues()
             let m2 = try mirror(reflecting: f2)
-            XCTAssertEqual(m1.capturedValues.count, 1)
-            XCTAssertEqual(m1.capturedValues[0] as? [String], ["foo", "bar", "baz"])
-            //XCTAssertEqual(m1.capturedValues[1] as? Int, 42)
-            XCTAssertEqual(m2.capturedValues.count, 1)
-            XCTAssertEqual(m2.capturedValues[0] as? [String], ["foo", "bar", "baz"])
-            //XCTAssertEqual(m2.capturedValues[1] as? Int, 42)
+            let values2 = try m2.capturedValues()
+            XCTAssertEqual(values1.count, 1)
+            XCTAssertEqual(values1[0] as? [String], ["foo", "bar", "baz"])
+            //XCTAssertEqual(values1[1] as? Int, 42)
+            XCTAssertEqual(values2.count, 1)
+            XCTAssertEqual(values2[0] as? [String], ["foo", "bar", "baz"])
+            //XCTAssertEqual(values2[1] as? Int, 42)
             XCTAssertEqual(m1.context, m2.context)
             ctx = m1.context
         }
         f2()
         do {
             let m1 = try mirror(reflecting: f1)
+            let values1 = try m1.capturedValues()
             let m2 = try mirror(reflecting: f2)
-            XCTAssertEqual(m1.capturedValues.count, 1)
-            XCTAssertEqual(m1.capturedValues[0] as? [String], ["foo", "bar", "baz", "zop"])
-            //XCTAssertEqual(m1.capturedValues[1] as? Int, 47)
-            XCTAssertEqual(m2.capturedValues.count, 1)
-            XCTAssertEqual(m2.capturedValues[0] as? [String], ["foo", "bar", "baz", "zop"])
-            //XCTAssertEqual(m2.capturedValues[1] as? Int, 47)
+            let values2 = try m2.capturedValues()
+            XCTAssertEqual(values1.count, 1)
+            XCTAssertEqual(values1[0] as? [String], ["foo", "bar", "baz", "zop"])
+            //XCTAssertEqual(values1[1] as? Int, 47)
+            XCTAssertEqual(values2.count, 1)
+            XCTAssertEqual(values2[0] as? [String], ["foo", "bar", "baz", "zop"])
+            //XCTAssertEqual(values2[1] as? Int, 47)
             XCTAssertEqual(m1.context, m2.context)
             XCTAssertEqual(m1.context, ctx)
         }
@@ -220,36 +234,34 @@ class FunctionMirrorTests: XCTestCase {
     func testByRef() throws {
         let (f1, f2) = makeByRef()
         let m1 = try mirror(reflecting: f1)
-        XCTAssertEqual(m1.capturedValues.count, 2)
-        let r11 = m1.capturedValues[0] as! ByRefMirror
-        XCTAssertTypeEqual(try r11.type(), [String].self)
-        XCTAssertAnyEqual(try r11.value(), ["foo", "bar", "baz"])
-        let r12 = m1.capturedValues[1] as! ByRefMirror
-        XCTAssertTypeEqual(try r12.type(), Int.self)
-        XCTAssertAnyEqual(try r12.value(), 7)
+        let references1 = try m1.captureReferences()
+        XCTAssertEqual(references1.count, 2)
+        let r11 = references1[0]
+        XCTAssertEqual(r11.value as? [String], ["foo", "bar", "baz"])
+        let r12 = references1[1]
+        XCTAssertEqual(r12.value as? Int, 7)
         let m2 = try mirror(reflecting: f2)
-        XCTAssertEqual(m2.capturedValues.count, 2)
-        let r21 = m2.capturedValues[0] as! ByRefMirror
-        XCTAssertTypeEqual(try r21.type(), [String].self)
-        XCTAssertAnyEqual(try r21.value(), ["foo", "bar", "baz"])
-        let r22 = m2.capturedValues[1] as! ByRefMirror
-        XCTAssertTypeEqual(try r22.type(), Int.self)
-        XCTAssertAnyEqual(try r22.value(), 42)
+        let references2 = try m2.captureReferences()
+        XCTAssertEqual(references2.count, 2)
+        let r21 = references2[0]
+        XCTAssertEqual(r21.value as? [String], ["foo", "bar", "baz"])
+        let r22 = references2[1]
+        XCTAssertEqual(r22.value as? Int, 42)
         XCTAssertEqual(r11, r21)
         XCTAssertNotEqual(r12, r22)
 
         XCTAssertEqual(f1(), ArrayAndInt(a: ["foo", "bar", "baz", "qux"], b: 14))
-        XCTAssertAnyEqual(try r11.value(), ["foo", "bar", "baz", "qux"])
-        XCTAssertAnyEqual(try r12.value(), 14)
-        try r11.setValue([] as [String])
-        try r12.setValue(2)
+        XCTAssertEqual(r11.value as? [String], ["foo", "bar", "baz", "qux"])
+        XCTAssertEqual(r12.value as? Int, 14)
+        r11.value = ([] as [String])
+        r12.value = 2
         XCTAssertEqual(f1(), ArrayAndInt(a: ["qux"], b: 4))
 
         XCTAssertEqual(f2(), ArrayAndInt(a: ["qux", "zop"], b: 47))
-        XCTAssertAnyEqual(try r21.value(), ["qux", "zop"])
-        XCTAssertAnyEqual(try r22.value(), 47)
-        try r21.setValue(["xyz"] as [String])
-        try r22.setValue(1)
+        XCTAssertEqual(r21.value as? [String], ["qux", "zop"])
+        XCTAssertEqual(r22.value as? Int, 47)
+        r21.value = ["xyz"]
+        r22.value = 1
         XCTAssertEqual(f2(), ArrayAndInt(a: ["xyz", "zop"], b: 6))
     }
 }

@@ -41,6 +41,14 @@ struct HeapLocalVariableMetadata {
         return Int(pointer.pointee.offsetToFirstCapture)
     }
 
+    var numCaptureTypes: Int {
+        return Int(pointer.pointee.captureDescription.pointee.numCaptureTypes)
+    }
+
+    var numMetadataSources: Int {
+        return Int(pointer.pointee.captureDescription.pointee.numMetadataSources)
+    }
+
     var numBindings: Int {
         return Int(pointer.pointee.captureDescription.pointee.numBindings)
     }
@@ -71,23 +79,5 @@ struct HeapLocalVariableMetadata {
         return try types.map {
             return try $0.type(genericContext: nil, genericArguments: nil)
         }
-    }
-
-    func fields() throws -> [(Int, Any.Type)] {
-        var offset = self.offsetToFirstCapture
-        offset += MemoryLayout<Any.Type>.size * Int(self.numBindings)
-
-        var res: [(Int, Any.Type)] = []
-        for type in try self.types() {
-            var effectiveType = type
-            if Kind(type: type) == .opaque {
-                effectiveType = ByRefMirror.self
-            }
-            let info = try metadata(of: effectiveType)
-            let alignedOffset = (offset + info.alignment - 1) & ~(info.alignment - 1)
-            res.append((alignedOffset, effectiveType))
-            offset = alignedOffset + info.size
-        }
-        return res
     }
 }

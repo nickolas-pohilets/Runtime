@@ -5,12 +5,16 @@ let package = Package(
     products: [
         .library(
             name: "Runtime",
-            targets: ["Runtime"])
-        ],
-        dependencies: [
-             .package(url: "https://github.com/wickwirew/CRuntime.git", from: "2.1.2")
+            targets: ["Runtime"]),
+        .library(
+            name: "CRuntime",
+            type: .static,
+            targets: ["CRuntime"]),
         ],
     targets: [
+        .target(
+            name: "CRuntime",
+            dependencies: []),
         .target(
             name: "Runtime",
             dependencies: ["CRuntime"]),

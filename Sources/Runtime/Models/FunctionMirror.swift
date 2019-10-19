@@ -21,219 +21,355 @@
 // SOFTWARE.
 
 import Foundation
+import CRuntime
 
-public struct ByRefMirror: Hashable {
-    // TODO: Ideally this should be Builtin.NativeObject to have proper reference counting
-    // Note that this cannot be AnyObject, which also does some ObjC checks and crashes there.
-    private var ptr: UnsafeRawPointer
+public enum HashableSupport {
+    case none
+    case witnessTable(UnsafeRawPointer)
+    case reference
+    case function(FunctionInfo)
+}
 
-    public func type() throws -> Any.Type {
-        return try self.field().1
+public enum CaptureTypeInfo {
+    case direct(type: Any.Type, hashable: HashableSupport)
+    case indirect(layout: CaptureLayout)
+}
+
+public struct CaptureReference: Hashable {
+    var pointer: UnsafeRawPointer
+    var type: Any.Type
+
+    var value: Any {
+        get {
+            return getters(type: self.type).get(from: self.pointer)
+        }
+        nonmutating set {
+            let mutablePtr = UnsafeMutableRawPointer(mutating: self.pointer)
+            setters(type: self.type).set(value: newValue, pointer: mutablePtr)
+        }
     }
 
-    public func value() throws -> Any {
-        let (ptr, type) = try self.field()
-        return getters(type: type).get(from: ptr)
+    public static func == (lhs: CaptureReference, rhs: CaptureReference) -> Bool {
+        return lhs.pointer == rhs.pointer && metadataPointer(type: lhs.type) == metadataPointer(type: rhs.type)
     }
 
-    public func setValue(_ value: Any) throws {
-        let (ptr, type) = try self.field()
-        setters(type: type).set(value: value, pointer: UnsafeMutableRawPointer(mutating: ptr))
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(self.pointer)
     }
+}
 
-    private func field() throws -> (UnsafeRawPointer, Any.Type) {
-        let type = self.ptr.assumingMemoryBound(to: HeapObject.self).pointee.md
-        switch Kind(type: type) {
-        case .heapLocalVariable:
-            let md = HeapLocalVariableMetadata(type: type)
-            let fields = try md.fields()
-            if fields.count != 1 {
-                throw RuntimeError.unexpectedByRefLayout(type: md.type)
+public struct CaptureField {
+    var offset: Int
+    var typeInfo: CaptureTypeInfo
+
+    var isHashable: Bool {
+        switch typeInfo {
+        case let .direct(_, hashable):
+            switch hashable {
+            case .none:
+                return false
+            default:
+                return true
             }
-            let (offset, fieldType) = fields[0]
-            let ptr = self.ptr.advanced(by: offset)
-            return (ptr, fieldType)
-        case .heapGenericLocalVariable:
-            let md = HeapGenericLocalVariableMetadata(type: type)
-            let ptr = self.ptr.advanced(by: md.valueOffset)
-            return (ptr, md.valueType)
-        default:
-            throw RuntimeError.unexpectedByRefLayout(type: type)
+        case let .indirect(layout):
+            return layout.isHashable
+        }
+    }
+
+    func enumerateReference(ctx: UnsafeRawPointer, block: (CaptureReference) throws -> Void ) rethrows {
+        let ptr = ctx.advanced(by: offset)
+        switch typeInfo {
+        case let .direct(type, _):
+            try block(CaptureReference(pointer: ptr, type: type))
+        case let .indirect(layout):
+            let indirectCtx = ptr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+            try layout.enumerateReference(ctx: indirectCtx, block: block)
+        }
+    }
+
+    func areEqual(_ lhs: UnsafeRawPointer, _ rhs: UnsafeRawPointer) -> Bool {
+        let lhsPtr = lhs.advanced(by: offset)
+        let rhsPtr = rhs.advanced(by: offset)
+        switch typeInfo {
+        case let .direct(type, hashable):
+            switch hashable {
+            case .none:
+                return false
+            case let .witnessTable(witnessTable):
+                return runtime_equalityHelper(lhsPtr, rhsPtr, metadataPointer(type: type), witnessTable)
+            case .reference:
+                let lhsValue = lhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+                let rhsValue = rhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+                return lhsValue == rhsValue
+            case let .function(info):
+                let lhsMirror = FunctionMirror(info: info, pointer: lhsPtr.assumingMemoryBound(to: SwiftFunction.self))
+                let rhsMirror = FunctionMirror(info: info, pointer: rhsPtr.assumingMemoryBound(to: SwiftFunction.self))
+                return lhsMirror == rhsMirror
+            }
+        case let .indirect(layout):
+            return layout.areEqual(
+                lhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee,
+                rhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+            )
         }
     }
 }
 
-private struct HeapObject {
-    var md: Any.Type
+public struct CaptureLayout {
+    private var pointer: UnsafeRawPointer
+
+    fileprivate init(count: Int) {
+        let countAlignment = MemoryLayout<Int>.alignment
+        let fieldAlignemnt = MemoryLayout<CaptureField>.alignment
+        let offset = (MemoryLayout<Int>.size + fieldAlignemnt - 1) & ~(fieldAlignemnt - 1)
+        let size = offset + MemoryLayout<CaptureField>.stride * count
+        let alignment = max(countAlignment, fieldAlignemnt)
+
+        let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: size, alignment: alignment)
+        buffer.baseAddress?.assumingMemoryBound(to: Int.self).initialize(to: (count << 1) | 1)
+        self.pointer = UnsafeRawPointer(buffer.baseAddress!)
+    }
+
+    fileprivate func add(field: CaptureField, at index: Int) {
+        self.fields.baseAddress!.mutable.advanced(by: index).initialize(to: field)
+        if !field.isHashable {
+            self.pointer.assumingMemoryBound(to: Int.self).mutable.pointee &= ~1
+        }
+    }
+
+    var isHashable: Bool {
+        return pointer.assumingMemoryBound(to: Int.self).pointee & 1 != 0
+    }
+
+    var fieldCount: Int {
+        return pointer.assumingMemoryBound(to: Int.self).pointee >> 1
+    }
+
+    var fields: UnsafeBufferPointer<CaptureField> {
+        let alignment = MemoryLayout<CaptureField>.alignment
+        let offset = (MemoryLayout<Int>.size + alignment - 1) & ~(alignment - 1)
+        let start = pointer.advanced(by: offset).assumingMemoryBound(to: CaptureField.self)
+        return UnsafeBufferPointer(start: start, count: self.fieldCount)
+    }
+
+    func enumerateReference(ctx: UnsafeRawPointer, block: (CaptureReference) throws -> Void ) rethrows {
+        for field in self.fields {
+            try field.enumerateReference(ctx: ctx, block: block)
+        }
+    }
+
+    func areEqual(_ lhs: UnsafeRawPointer, _ rhs: UnsafeRawPointer) -> Bool {
+        for f in self.fields {
+            if !f.areEqual(lhs, rhs) {
+                return false
+            }
+        }
+        return true
+    }
 }
 
-private struct SwiftFunction {
-    var f: @convention(c) (AnyObject) -> Void
-    var ctx: UnsafePointer<HeapObject>?
+private func getHashableProtocolWitness(type: Any.Type) -> UnsafeRawPointer? {
+    let typeAsPtr = unsafeBitCast(type, to: UnsafeRawPointer.self)
+    let hashableDescriptor: UnsafeRawPointer = runtime_getHashableProtocolDescriptor()
+    return swift_conformsToProtocol(typeAsPtr, hashableDescriptor)
 }
 
-public struct FunctionMirror {
+public func equalityHelperImpl<T: Hashable>(_ lhs: UnsafePointer<T>, _ rhs: UnsafePointer<T>) -> Bool {
+    return lhs.pointee == rhs.pointee
+}
+
+private class CaptureLayoutCache {
+    static let nullLayout = CaptureLayout(count: 0)
+    static let instance = CaptureLayoutCache()
+    private var data: [UnsafeRawPointer: Result<CaptureLayout, Error>] = [:]
+    private var lock = NSLock()
+
+    private init() {}
+
+    public func layout(ctx: UnsafeRawPointer?) throws -> CaptureLayout {
+        guard let ctx = ctx else { return CaptureLayoutCache.nullLayout }
+        lock.lock()
+        defer { lock.unlock() }
+        return try self.layoutLocked(ctx: ctx)
+    }
+
+    private func layoutLocked(ctx: UnsafeRawPointer) throws -> CaptureLayout {
+        let md = ctx.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+        if let existing = data[md] {
+            return try existing.get()
+        }
+
+        let new = tryBuildLayout(ctx: ctx, md: md)
+        data[md] = new
+        return try new.get()
+    }
+
+    private func tryBuildLayout(ctx: UnsafeRawPointer, md: UnsafeRawPointer) -> Result<CaptureLayout, Error> {
+        do {
+            return .success(try buildLayout(ctx: ctx, md: md))
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func buildLayout(ctx: UnsafeRawPointer, md: UnsafeRawPointer) throws -> CaptureLayout {
+        let type = unsafeBitCast(md, to: Any.Type.self)
+        let kind = Kind(type: type)
+        guard kind == .heapLocalVariable else { throw RuntimeError.couldNotGetTypeInfo(type: type, kind: kind) }
+
+        let md = HeapLocalVariableMetadata(type: type)
+        if md.numBindings > 0 || md.numMetadataSources > 0 {
+            // There are major complications in demangling generic functions
+            // There is not much runtime API available to demangle a type:
+            //   swift_getTypeByMangledNameInContext() - allows to demangle generic type name in the context of nominal type
+            //   swift_getTypeByMangledNameInEnvironment() - allows to demangle generic type name in the context of a function
+            //
+            // The later seems to be a perfect match for our purposes, but there seems to be no way to obtain one from a compiler.
+            // Generic environment is used only to create an instance of generic key path, and it can be obtained from a key path instance.
+            //
+            // In theory, it might be possible to construct en environment from metadataSources(), but .referenceCapture and
+            // .metadataCapture are a problem. If function captures a reference to generic class and generic parameters can be read
+            // from medata of that class - compiler strongly prefers that source to bindings. This may lead to a situation where
+            // you need to read a field value before knowing types of the previous fields. But to determinate an offset to the field,
+            // one needs to know types of all the previous fields. Such cases are not handled even by the swiftRemoteMirror library.
+            //
+            // Captured values of generic types, whose size depends on the generic parameters, get boxed. So all the remaining types
+            // should have a layout which does not depend on the type. So, in theory, even this should be a solvable problem.
+            //
+            // There seem to be no data struct which would provide size and alignment of the unspecialized generic type.
+            // One crazy idea that can be tried here - we can try to specialize generic type with dummy type arguments.
+            // But for this to work, dummy type arguments should satisfy all the generic requirements.
+            // The Never type conforms to any protocol but still crashes when trying to obtain the type.
+            // But even the Never type does not satisfy associated type constraints.
+            throw RuntimeError.genericFunctionsAreNotSupported
+        }
+
+        let layout = CaptureLayout(count: md.numCaptureTypes)
+
+        var offset = md.offsetToFirstCapture
+        offset += MemoryLayout<Any.Type>.size * md.numBindings
+        for (i, typeName) in md.capturedTypes().enumerated() {
+            let fieldType = try typeName.type(genericContext: nil, genericArguments: nil)
+            let fieldKind = Kind(type: fieldType)
+            let effectiveType = fieldKind == .opaque ? UnsafeRawPointer.self: fieldType
+            let info = try metadata(of: effectiveType)
+            let alignedOffset = (offset + info.alignment - 1) & ~(info.alignment - 1)
+            offset = alignedOffset + info.size
+
+            if fieldKind == .opaque {
+                let indirectPtr = ctx.advanced(by: alignedOffset).assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+                let indirectLayout = try self.layoutLocked(ctx: indirectPtr)
+                layout.add(field: CaptureField(offset: alignedOffset, typeInfo: .indirect(layout: indirectLayout)), at: i)
+            } else {
+                let hashable: HashableSupport
+                if let hashableWitnessTable = getHashableProtocolWitness(type: fieldType) {
+                    hashable = .witnessTable(hashableWitnessTable)
+                } else if fieldKind == .function {
+                    let funcInfo = try functionInfo(of: fieldType)
+                    if funcInfo.callingConvention == .swift {
+                        hashable = .function(funcInfo)
+                    } else if info.size == MemoryLayout<UnsafeRawPointer>.size {
+                        hashable = .reference
+                    } else {
+                        hashable = .none
+                    }
+                } else if fieldKind == .class || fieldKind == .foreignClass || fieldKind == .metatype || fieldKind == .objCClassWrapper {
+                    assert(info.size == MemoryLayout<UnsafeRawPointer>.size)
+                    hashable = .reference
+                } else {
+                    hashable = .none
+                }
+                layout.add(field: CaptureField(offset: alignedOffset, typeInfo: .direct(type: fieldType, hashable: hashable)), at: i)
+            }
+        }
+        return layout
+    }
+}
+
+fileprivate struct SwiftFunction {
+    var f: UnsafeRawPointer
+    var ctx: UnsafeRawPointer?
+}
+
+
+public struct FunctionMirror: Hashable {
     public var info: FunctionInfo
     public var function: UnsafeRawPointer
     public var context: UnsafeRawPointer?
-    public var capturedValues: [Any]
 
     public init(reflecting f: Any) throws {
-        self.info = try functionInfo(of: f)
+        let info = try functionInfo(of: f)
         if info.callingConvention != .swift {
             throw RuntimeError.unsupportedCallingConvention(function: f, callingConvention: info.callingConvention)
         }
-        
-        var ff = f
 
-        var funcPtr = UnsafeRawPointer(bitPattern: 0)
-        var ctxPtr = UnsafeRawPointer(bitPattern: 0)
-        var values: [Any] = []
-
-        try withValuePointer(of: &ff) {
-            let f = $0.assumingMemoryBound(to: SwiftFunction.self).pointee
-
-            funcPtr = unsafeBitCast(f.f, to: UnsafeRawPointer.self)
-
-            guard let ctx = f.ctx else { return }
-            ctxPtr = ctx.raw
-            let type = ctx.pointee.md
-            let kind = Kind(type: type)
-            assert(kind == .heapLocalVariable)
-            let md = HeapLocalVariableMetadata(type: type)
-
-            var offset = md.offsetToFirstCapture
-            offset += MemoryLayout<Any.Type>.size * md.numBindings
-
-            let bindingsPtr = ctx.raw.advanced(by: md.offsetToFirstCapture).assumingMemoryBound(to: Any.Type.self)
-            let bindings = UnsafeBufferPointer(start: bindingsPtr, count: Int(md.numBindings))
-            let metadataSources = try md.metadataSources()
-            let types = md.capturedTypes()
-            values = try FunctionMirror.buildValues(
-                ctx: ctx,
-                offset: offset,
-                bindings: bindings,
-                metadataSources: metadataSources,
-                types: types
-            )
+        var mutableF = f
+        let ptr = try withValuePointer(of: &mutableF) {
+            return $0.assumingMemoryBound(to: SwiftFunction.self)
         }
-
-        self.function = funcPtr!
-        self.context = ctxPtr
-        self.capturedValues = values
+        self.init(info: info, pointer: ptr)
     }
 
-    static func buildValues(
-        ctx: UnsafeRawPointer,
-        offset: Int,
-        bindings: UnsafeBufferPointer<Any.Type>,
-        metadataSources: [(GenericParam, MetadataSource)],
-        types: [MangledTypeName]
-    ) throws -> [Any] {
-        let levelsCount = metadataSources.map { $0.0.depth }.max().map { $0 + 1} ?? 0
-        var counts = Array<Int>(repeating: 0, count: levelsCount)
-        for (param, _) in metadataSources {
-            counts[param.depth] = max(counts[param.depth], param.index + 1)
+    fileprivate init(info: FunctionInfo, pointer: UnsafePointer<SwiftFunction>) {
+        assert(info.callingConvention == .swift)
+        self.info = info
+        self.function = pointer.pointee.f
+        self.context = pointer.pointee.ctx
+    }
+
+    public func captureLayout() throws -> CaptureLayout {
+        return try CaptureLayoutCache.instance.layout(ctx: self.context)
+    }
+
+    public func capturedValues() throws -> [Any] {
+        guard let ctx = self.context else { return [] }
+        let layout = try self.captureLayout()
+        var result: [Any] = []
+        layout.enumerateReference(ctx: ctx) {
+            result.append($0.value)
         }
-        var indices: [GenericParam: Int] = [:]
-        var totalCount = 0
-        for (i, x) in counts.enumerated() {
-            for j in 0..<x {
-                indices[GenericParam(depth: i, index: j)] = indices.count
-            }
-            totalCount += x
-            counts[i] = totalCount
+        return result
+    }
+
+    public func captureReferences() throws -> [CaptureReference] {
+        guard let ctx = self.context else { return [] }
+        let layout = try self.captureLayout()
+        var result: [CaptureReference] = []
+        layout.enumerateReference(ctx: ctx) {
+            result.append($0)
         }
+        return result
+    }
 
-        let requirementsCount = 0;
-
-        // See TargetGenericEnvironment<> and IRGenModule::getAddrOfGenericEnvironment()
-        // Layout of the environment data structure:
-        // - flags: 32 bit
-        //    - number of levels: 12 bit
-        //    - number of requirements: 12 bit
-        //    - reserved: 8 bit
-        // - running counts of generic params per level
-        //    - number of levels x 16 bit
-        // - generic params
-        //    - total number of params x 8 bit
-        //       - kind: 6 bit
-        //          - 0 = type
-        //          - other - reserved
-        //      - hasExtraArgument: 1 bit - always false
-        //      - hasKeyArgument: 1 bit - true if generic parameter cannot deduced from same type requirements - see GenericSignatureImpl::forEachParam()
-        // - generic requirements
-        //    - number of requirements x 64 bit
-        //       - flags: 32 bit
-        //          - kind: 6 bit
-        //             - 0 = protocol requirement
-        //             - 1 = same-type requirement
-        //             - 2 = base class requirement
-        //             - 3 = same conformance
-        //             - 0x1F = a layout constraint
-        //          - hasExtraArgument: 1 bit
-        //          - hasKeyArgument: 1 bit
-        //       - relative offset to param: 16 bit
-        //       - kind-specific payload: 16 bit
-        let envSize = 4 + 2 * levelsCount + 1 * totalCount + 8 * requirementsCount;
-        let envPtr = UnsafeMutableRawPointer.allocate(byteCount: envSize, alignment: 16)
-        defer { envPtr.deallocate() }
-
-        var ptr = envPtr
-        ptr.assumingMemoryBound(to: UInt32.self).pointee = UInt32(levelsCount) | (UInt32(requirementsCount) << 12)
-        ptr = ptr.advanced(by: 4)
-
-        for k in counts {
-            ptr.assumingMemoryBound(to: UInt16.self).pointee = UInt16(k)
-            ptr = ptr.advanced(by: 2)
+    public static func == (lhs: FunctionMirror, rhs: FunctionMirror) -> Bool {
+        if lhs.function != rhs.function {
+            // Totally unrelated blocks
+            return false
         }
 
-        for _ in 0..<totalCount {
-            ptr.assumingMemoryBound(to: UInt8.self).pointee = 0x80
-            ptr = ptr.advanced(by: 1)
+        if lhs.context == rhs.context {
+            // Perfect match
+            return true
         }
 
-        let argsPtr = UnsafeMutablePointer<Any.Type?>.allocate(capacity: totalCount)
-        defer { argsPtr.deallocate() }
-        for i in 0..<totalCount {
-            argsPtr.advanced(by: i).initialize(to: nil)
+        guard let lhsCtx = lhs.context else { return false }
+        guard let rhsCtx = rhs.context else { return false }
+
+        let lhsMD = lhsCtx.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+        let rhsMD = rhsCtx.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
+        guard lhsMD == rhsMD else { return false }
+
+        if let layout = try? lhs.captureLayout(), layout.isHashable {
+            return layout.areEqual(lhsCtx, rhsCtx)
+        } else {
+            // We failed to get a layout
+            // Fallback to bitwise comparison
+            // We already checked contexts, so we know that's not a match
+            return false
         }
+    }
 
-        var captureIndicesAffectingMetadata = Set<Int>()
-        for (param, source) in metadataSources {
-            if let captureIndex = source.captureIndex {
-                captureIndicesAffectingMetadata.insert(captureIndex)
-            }
-            let md = source.resolve(bindings: bindings, values: [])
-            let index = indices[param]!
-            argsPtr.advanced(by: index).pointee = md
-        }
-
-        var values: [Any] = []
-        var fieldOffset = offset
-        for (i, mangledType) in types.enumerated() {
-            let type = try mangledType.type(genericEnvironment: envPtr, genericArguments: argsPtr)
-            var effectiveType = type
-            if Kind(type: type) == .opaque {
-                effectiveType = ByRefMirror.self
-            }
-            let info = try metadata(of: effectiveType)
-            let alignedOffset = (fieldOffset + info.alignment - 1) & ~(info.alignment - 1)
-            fieldOffset = alignedOffset + info.size
-
-            let fieldPtr = ctx.advanced(by: alignedOffset)
-            let getter = getters(type: effectiveType)
-            let value = getter.get(from: fieldPtr)
-            values.append(value)
-
-            if captureIndicesAffectingMetadata.contains(i) {
-                for (param, source) in metadataSources {
-                   let md = source.resolve(bindings: bindings, values: values)
-                   let index = indices[param]!
-                   argsPtr.advanced(by: index).pointee = md
-               }
-            }
-        }
-        return values
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(self.function)
     }
 }

@@ -127,25 +127,13 @@ class FunctionMirrorGenericTests: XCTestCase {
 
     func testCaptureValuesOfManyTypes() throws {
         let f = makeCaptureValuesOfManyTypes(x: 42, y: "abc", z: (nil as ObjectIdentifier?))
-        let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 3)
-        let xm = m.capturedValues[0] as! ByRefMirror
-        XCTAssertEqual(try xm.value() as? Int, 42)
-        let ym = m.capturedValues[1] as! ByRefMirror
-        XCTAssertEqual(try ym.value() as? String, "abc")
-        let zm = m.capturedValues[2] as! ByRefMirror
-        XCTAssertEqual(cast(try zm.value(), to: ObjectIdentifier?.self), ObjectIdentifier??.some(nil))
+        XCTAssertThrowsError(try mirror(reflecting: f).captureLayout())
     }
 
     func testCaptureMiscSpecializedGenerics() throws {
         let x = Z(value: "abc")
         let f = makeCaptureMiscSpecializedGenerics(x: x)
-        let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 4)
-        XCTAssertEqual(try? (m.capturedValues[0] as? ByRefMirror)?.value() as? Z, x)
-        XCTAssertEqual(m.capturedValues[1] as? [Z], [x, x])
-        XCTAssertEqual(cast(try (m.capturedValues[2] as! ByRefMirror).value(), to: Z?.self), Z??.some(nil))
-        XCTAssertEqual(try? (m.capturedValues[3] as? ByRefMirror)?.value() as? GenericStruct<Z, Z>, GenericStruct(x: x, y: x))
+        XCTAssertThrowsError(try mirror(reflecting: f).captureLayout())
     }
 
     func testCaptureDeepGenerics() throws {
@@ -153,70 +141,7 @@ class FunctionMirrorGenericTests: XCTestCase {
         typealias B = A.Middle<[String], Double?, FunctionMirrorGenericTests, Data>
         typealias C = B.Inner<Mirror, SIMD4<Float>, IndexSet>
         let f = C().makeFunc(a: "abc", b: self, c: IndexSet(integersIn: 0..<10))
-        let m = try mirror(reflecting: f)
-        XCTAssertEqual(m.capturedValues.count, 3)
-    }
-
-    func testWIP() throws {
-////        let g = makeGenericStruct(x: [s], y: s)
-////        let ti = try typeInfo(of: type(of: g))
-////        print(ti)
-//
-//        // Case 1
-//        //  types:
-//        //    "xz_x_q_SHRzSHR_r0_lXX"
-//        //    "q_z_x_q_SHRzSHR_r0_lXX"
-//        //  sources:
-//        //    "x" -> B0
-//        //    "q_" -> B1
-//        //let f = makeGeneric(x: [s], y: s)
-//
-//        // Case 2:
-//        //  types:
-//        //    "xz_x_SHRzlXX"
-//        //    "SayxG"
-//        //    "xSgz_x_SHRzlXX"
-//        //  sources:
-//        //    "x" -> B0
-//        //let f = makeGeneric2(x: s)
-//
-//        // Case 3:
-//        //  types:
-//        //     "xz_x_SHRzlXX"
-//        //  sources:
-//        //     "x" -> "B0"
-//        // let f = s.makeGeneric()
-//
-//        // Case 4:
-//        //  types:
-//        //    {01:0xfffffe84800000d0}yxG
-//        //    xz_x_SHRzlXX
-//        //  sources:
-//        //     "x" -> "G0R0_"
-//        //     no bindings
-//        //let f = GenericProvider<String>(x: "abc").makeGeneric("xyz")
-//
-//        //  'B' -> ClosureBinding
-//        //  'R' -> ReferenceCapture
-//        //  'M' -> MetadataCapture
-//        //  'G' -> GenericArgument
-//        //  'S' -> Self
-//        //let f = makeGenericMD(type: MyStruct.self)
-//        let f = makeGenericByRef(x: 0xaaaaaaaaaaaa, y: 0xbbbbbbbbbbbb)
-//        let m = try mirror(reflecting: f)
-//        XCTAssertEqual(m.capturedValues.count, 2)
-//        do {
-//            let xm = m.capturedValues[0] as! ByRefMirror
-//            let v = try xm.value()
-//            print(v)
-//        }
-//        do {
-//            let ym = m.capturedValues[1] as! ByRefMirror
-//            let v = try ym.value()
-//            print(v)
-//        }
-//        XCTAssertEqual(m.capturedValues[0] as? [MyStruct], [s])
-//        XCTAssertEqual(m.capturedValues[1] as? MyStruct, s)
+        XCTAssertThrowsError(try mirror(reflecting: f).captureLayout())
     }
 
     func testMetadataSource() {

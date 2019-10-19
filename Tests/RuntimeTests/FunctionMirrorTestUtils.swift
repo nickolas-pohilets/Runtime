@@ -44,8 +44,9 @@ func XCTAssertTypeEqual(_ lhs: Any.Type, _ rhs: Any.Type, _ message: String = ""
 
 func mirror(reflecting f: Any) throws -> FunctionMirror {
     let m = try FunctionMirror(reflecting: f)
-    if m.capturedValues.count == 1 {
-        let value = m.capturedValues[0]
+    let values = try m.capturedValues()
+    if values.count == 1 {
+        let value = values[0]
         let info = try metadata(of: type(of: value))
         if info.kind == .function {
             return try FunctionMirror(reflecting: value)
