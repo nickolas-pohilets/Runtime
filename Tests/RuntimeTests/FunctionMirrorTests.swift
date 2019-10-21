@@ -119,6 +119,10 @@ class FunctionMirrorTests: XCTestCase {
         let m = try mirror(reflecting: f)
         let values = try m.capturedValues()
         XCTAssert(values.isEmpty)
+
+        let g = makeEmptyFunc();
+        let n = try mirror(reflecting: g)
+        XCTAssertEqual(m, n)
     }
     
     func testBuiltIn() throws {
@@ -130,6 +134,12 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertEqual(values[1] as? Int, 37)
         XCTAssertEqual(values[2] as? Int, 42)
         XCTAssertEqual(values[3] as? String, "abc")
+
+        XCTAssertEqual(m, try mirror(reflecting: makeBuiltIn(37, "abc", 42, true)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeBuiltIn(35, "abc", 42, true)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeBuiltIn(37, "xyz", 42, true)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeBuiltIn(37, "abc", -1, true)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeBuiltIn(37, "abc", 42, false)))
     }
 
     func testArray() throws {
@@ -139,6 +149,9 @@ class FunctionMirrorTests: XCTestCase {
         let values = try m.capturedValues()
         XCTAssertEqual(values.count, 1)
         XCTAssertEqual(values[0] as? [String], x)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeArray(["abc", "def", "long long long string that would not fit into inline buffer"])))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeArray(["abc", "def"])))
     }
 
     func testStruct() throws {
@@ -148,47 +161,74 @@ class FunctionMirrorTests: XCTestCase {
         let values = try m.capturedValues()
         XCTAssertEqual(values.count, 1)
         XCTAssertEqual(values[0] as? MyStruct, s)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeStruct(MyStruct(a: 22, b: "xyz", c: [true, false, true]))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeStruct(MyStruct(a: 21, b: "xyz", c: [true, false, true]))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeStruct(MyStruct(a: 22, b: "abc", c: [true, false, true]))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeStruct(MyStruct(a: 22, b: "xyz", c: [true, true, true]))))
     }
 
-    func testAny() throws {
-        do {
-            let f = makeAny(42)
-            let m = try mirror(reflecting: f)
-            let values = try m.capturedValues()
-            XCTAssertEqual(values.count, 1)
-            XCTAssertEqual(values[0] as? Int, 42)
-        }
-        do {
-            let f = makeAny("abc")
-            let m = try mirror(reflecting: f)
-            let values = try m.capturedValues()
-            XCTAssertEqual(values.count, 1)
-            XCTAssertEqual(values[0] as? String, "abc")
-        }
-        do {
-            let x = [true, false, nil]
-            let f = makeAny(x)
-            let m = try mirror(reflecting: f)
-            let values = try m.capturedValues()
-            XCTAssertEqual(values.count, 1)
-            XCTAssertEqual(values[0] as? [Bool?], x)
-        }
-        do {
-            let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
-            let f = makeAny(s)
-            let m = try mirror(reflecting: f)
-            let values = try m.capturedValues()
-            XCTAssertEqual(values.count, 1)
-            XCTAssertEqual(values[0] as? MyStruct, s)
-        }
-        do {
-            let c = MyClass(value: "abc")
-            let f = makeAny(c)
-            let m = try mirror(reflecting: f)
-            let values = try m.capturedValues()
-            XCTAssertEqual(values.count, 1)
-            XCTAssert(values[0] as? MyClass === c)
-        }
+    func testAnyInt() throws {
+        let f = makeAny(42)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(values[0] as? Int, 42)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny(42)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(43)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny("abc")))
+    }
+
+    func testAnyString() throws {
+        let f = makeAny("abc")
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(values[0] as? String, "abc")
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny("abc")))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny("xyz")))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(42)))
+    }
+
+    func testAnyArray() throws {
+        let x = [true, false, nil]
+        let f = makeAny(x)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(values[0] as? [Bool?], x)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny([true, false, nil])))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny([false, nil, true])))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(42)))
+    }
+
+    func testAnyHashableStruct() throws {
+        let s = MyStruct(a: 22, b: "xyz", c: [true, false, true])
+        let f = makeAny(s)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(values[0] as? MyStruct, s)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny(MyStruct(a: 22, b: "xyz", c: [true, false, true]))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(MyStruct(a: 21, b: "abc", c: [true, true, true]))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(42)))
+    }
+
+    func testAnyNonHashableClass() throws {
+        let c = MyClass(value: "abc")
+        let f = makeAny(c)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssert(values[0] as? MyClass === c)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny(c)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(MyClass(value: "abc"))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(42)))
     }
 
     func testMethod() throws {

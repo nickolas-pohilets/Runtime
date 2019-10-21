@@ -39,6 +39,8 @@ func metadata(of type: Any.Type) throws -> MetadataInfo {
         return ProtocolMetadata(type: type)
     case .tuple:
         return TupleMetadata(type: type)
+    case .optional:
+        fallthrough
     case .enum:
         return EnumMetadata(type: type)
     case .function:

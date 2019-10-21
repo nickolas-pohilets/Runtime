@@ -28,6 +28,7 @@ public enum HashableSupport {
     case witnessTable(UnsafeRawPointer)
     case reference
     case function(FunctionInfo)
+    case any
 }
 
 public enum CaptureTypeInfo {
@@ -95,6 +96,11 @@ public struct CaptureField {
             switch hashable {
             case .none:
                 return false
+            case .any:
+                // Note: using getter(type: Any.self) produces Any wrapped into an Any
+                guard let lhsValue = asHashable(lhsPtr.assumingMemoryBound(to: Any.self).pointee) else { return false }
+                guard let rhsValue = asHashable(rhsPtr.assumingMemoryBound(to: Any.self).pointee) else { return false }
+                return lhsValue == rhsValue
             case let .witnessTable(witnessTable):
                 return runtime_equalityHelper(lhsPtr, rhsPtr, metadataPointer(type: type), witnessTable)
             case .reference:
@@ -178,7 +184,40 @@ public func equalityHelperImpl<T: Hashable>(_ lhs: UnsafePointer<T>, _ rhs: Unsa
     return lhs.pointee == rhs.pointee
 }
 
-private class CaptureLayoutCache {
+private func asHashable(_ x: Any) -> AnyHashable? {
+    if let hashable = x as? AnyHashable {
+        return hashable
+    }
+    guard let info = try? metadata(of: type(of: x)) else { return nil }
+    if info.kind == .function {
+        if let mirror = try? FunctionMirror(reflecting: x) {
+            return AnyHashable(mirror)
+        } else if info.size == MemoryLayout<UnsafeRawPointer>.size {
+            return getReference(x)
+        } else {
+            return nil
+        }
+    } else if isReferenceKind(info.kind) {
+        assert(info.size == MemoryLayout<UnsafeRawPointer>.size)
+        return getReference(x)
+    } else {
+        return nil
+    }
+}
+
+private func isReferenceKind(_ kind: Kind) -> Bool {
+    return kind == .class || kind == .foreignClass || kind == .metatype || kind == .objCClassWrapper
+}
+
+private func getReference(_ x: Any) -> AnyHashable? {
+    var mutableX = x
+    return withUnsafePointer(to: &mutableX) {
+        let ptr = $0.withMemoryRebound(to: UnsafeRawPointer.self, capacity: 1) {$0.pointee}
+        return AnyHashable(ptr)
+    }
+}
+
+private final class CaptureLayoutCache {
     static let nullLayout = CaptureLayout(count: 0)
     static let instance = CaptureLayoutCache()
     private var data: [UnsafeRawPointer: Result<CaptureLayout, Error>] = [:]
@@ -262,7 +301,9 @@ private class CaptureLayoutCache {
                 layout.add(field: CaptureField(offset: alignedOffset, typeInfo: .indirect(layout: indirectLayout)), at: i)
             } else {
                 let hashable: HashableSupport
-                if let hashableWitnessTable = getHashableProtocolWitness(type: fieldType) {
+                if fieldType == Any.self {
+                    hashable = .any
+                } else if let hashableWitnessTable = getHashableProtocolWitness(type: fieldType) {
                     hashable = .witnessTable(hashableWitnessTable)
                 } else if fieldKind == .function {
                     let funcInfo = try functionInfo(of: fieldType)
@@ -273,7 +314,7 @@ private class CaptureLayoutCache {
                     } else {
                         hashable = .none
                     }
-                } else if fieldKind == .class || fieldKind == .foreignClass || fieldKind == .metatype || fieldKind == .objCClassWrapper {
+                } else if isReferenceKind(fieldKind) {
                     assert(info.size == MemoryLayout<UnsafeRawPointer>.size)
                     hashable = .reference
                 } else {
@@ -286,16 +327,31 @@ private class CaptureLayoutCache {
     }
 }
 
+/// Dummy class to make sure function context is retained if FunctionMirror outlives reflected value
+fileprivate final class FunctionContext {}
+
 fileprivate struct SwiftFunction {
     var f: UnsafeRawPointer
-    var ctx: UnsafeRawPointer?
+    var ctx: FunctionContext?
 }
-
 
 public struct FunctionMirror: Hashable {
     public var info: FunctionInfo
     public var function: UnsafeRawPointer
-    public var context: UnsafeRawPointer?
+    private var _context: FunctionContext?
+    public var context: UnsafeRawPointer? {
+        get {
+            guard let ctx = self._context else { return nil }
+            return UnsafeRawPointer(Unmanaged.passUnretained(ctx).toOpaque())
+        }
+        set {
+            if let ctx = newValue {
+                self._context = Unmanaged.fromOpaque(ctx).takeUnretainedValue()
+            } else {
+                self._context = nil
+            }
+        }
+    }
 
     public init(reflecting f: Any) throws {
         let info = try functionInfo(of: f)
@@ -314,7 +370,7 @@ public struct FunctionMirror: Hashable {
         assert(info.callingConvention == .swift)
         self.info = info
         self.function = pointer.pointee.f
-        self.context = pointer.pointee.ctx
+        self._context = pointer.pointee.ctx
     }
 
     public func captureLayout() throws -> CaptureLayout {
