@@ -62,6 +62,7 @@ fileprivate struct Z: Foo, Hashable {
 fileprivate struct Outer<T, U> {
     struct Middle<P, Q, R, S> {
         struct Inner<X, Y, Z> {
+            @_semantics("optimize.sil.specialize.generic.never")
             func makeFunc(a: U, b: R, c: Z) -> () -> Void {
                 let ax = [a]
                 let bx = [b]
@@ -97,10 +98,12 @@ private class GenericProvider<T: Hashable> {
 }
 
 class FunctionMirrorGenericTests: XCTestCase {
+    @_semantics("optimize.sil.specialize.generic.never")
     private func makeCaptureValuesOfManyTypes<X: Hashable, Y: Hashable, Z: Hashable>(x: X, y: Y, z: Z) -> () -> Void {
         return { print(x, y, z) }
     }
 
+    @_semantics("optimize.sil.specialize.generic.never")
     private func makeCaptureMiscSpecializedGenerics<T: Foo & Hashable>(x: T) -> () -> Void where T.Result: Hashable {
         let a: [T] = [x, x]
         let b: T? = nil
@@ -109,12 +112,14 @@ class FunctionMirrorGenericTests: XCTestCase {
         return { print(x, a, b as Any, d) }
     }
 
+    @_semantics("optimize.sil.specialize.generic.never")
     private func makeCaptureGenericType<T: DefaultConstructor>(type: T.Type) -> () -> Void {
         let x: [T] = []
         let y: T = T()
         return { print(type, x, y) }
     }
 
+    @_semantics("optimize.sil.specialize.generic.never")
     private func makeGenericByRef<T>(x: T, y: T) -> () -> Any {
         var acc = x;
         return {

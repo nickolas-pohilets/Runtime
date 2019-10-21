@@ -54,30 +54,37 @@ class FunctionMirrorTests: XCTestCase {
 //        ]
 //    }
 
+    @inline(never)
     private func makeEmptyFunc() -> () -> Void {
         return { print("boom!") }
     }
     
+    @inline(never)
     private func makeBuiltIn(_ a: Int, _ s: String, _ b: Int, _ f: Bool) -> () -> Void {
         return { if f { print(a + b) } else { print(s) } }
     }
 
+    @inline(never)
     private func makeArray( _ x: [String]) -> () -> Void {
         return { print(x) }
     }
 
+    @inline(never)
     private func makeStruct(_ s: MyStruct) -> () -> Void {
         return { print(s) }
     }
 
+    @inline(never)
     private func makeAny(_ x: Any) -> () -> Void {
         return { print(x) }
     }
 
+    @inline(never)
     private func makeMethod(_ value: String) -> () -> Void {
         return MyClass(value: value).dump
     }
 
+    @inline(never)
     private func makeSharedContext() -> (() -> Void, () -> Void) {
         var foo: [String] = ["foo", "bar", "baz"]
         let f1 = {
@@ -89,6 +96,7 @@ class FunctionMirrorTests: XCTestCase {
         return (f1, f2)
     }
 
+    @inline(never)
     private func makeByRef() -> (() -> ArrayAndInt, () -> ArrayAndInt) {
         var foo: [String] = ["foo", "bar", "baz"]
         var k: Int = 42
