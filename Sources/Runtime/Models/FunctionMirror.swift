@@ -27,7 +27,7 @@ public enum HashableSupport {
     case none
     case witnessTable(UnsafeRawPointer)
     case reference
-    case function(FunctionInfo)
+    case function
     case any
 }
 
@@ -107,9 +107,9 @@ public struct CaptureField {
                 let lhsValue = lhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
                 let rhsValue = rhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
                 return lhsValue == rhsValue
-            case let .function(info):
-                let lhsMirror = FunctionMirror(info: info, pointer: lhsPtr.assumingMemoryBound(to: SwiftFunction.self))
-                let rhsMirror = FunctionMirror(info: info, pointer: rhsPtr.assumingMemoryBound(to: SwiftFunction.self))
+            case .function:
+                let lhsMirror = lhsPtr.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
+                let rhsMirror = rhsPtr.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
                 return lhsMirror == rhsMirror
             }
         case let .indirect(layout):
@@ -308,7 +308,7 @@ private final class CaptureLayoutCache {
                 } else if fieldKind == .function {
                     let funcInfo = try functionInfo(of: fieldType)
                     if funcInfo.callingConvention == .swift {
-                        hashable = .function(funcInfo)
+                        hashable = .function
                     } else if info.size == MemoryLayout<UnsafeRawPointer>.size {
                         hashable = .reference
                     } else {
@@ -327,51 +327,9 @@ private final class CaptureLayoutCache {
     }
 }
 
-/// Dummy class to make sure function context is retained if FunctionMirror outlives reflected value
-fileprivate final class FunctionContext {}
-
-fileprivate struct SwiftFunction {
-    var f: UnsafeRawPointer
-    var ctx: FunctionContext?
-}
-
-public struct FunctionMirror: Hashable {
-    public var info: FunctionInfo
-    public var function: UnsafeRawPointer
-    private var _context: FunctionContext?
-    public var context: UnsafeRawPointer? {
-        get {
-            guard let ctx = self._context else { return nil }
-            return UnsafeRawPointer(Unmanaged.passUnretained(ctx).toOpaque())
-        }
-        set {
-            if let ctx = newValue {
-                self._context = Unmanaged.fromOpaque(ctx).takeUnretainedValue()
-            } else {
-                self._context = nil
-            }
-        }
-    }
-
-    public init(reflecting f: Any) throws {
-        let info = try functionInfo(of: f)
-        if info.callingConvention != .swift {
-            throw RuntimeError.unsupportedCallingConvention(function: f, callingConvention: info.callingConvention)
-        }
-
-        var mutableF = f
-        let ptr = try withValuePointer(of: &mutableF) {
-            return $0.assumingMemoryBound(to: SwiftFunction.self)
-        }
-        self.init(info: info, pointer: ptr)
-    }
-
-    fileprivate init(info: FunctionInfo, pointer: UnsafePointer<SwiftFunction>) {
-        assert(info.callingConvention == .swift)
-        self.info = info
-        self.function = pointer.pointee.f
-        self._context = pointer.pointee.ctx
-    }
+private struct FunctionMirrorImpl: Hashable {
+    var function: UnsafeRawPointer
+    var context: UnsafeRawPointer?
 
     public func captureLayout() throws -> CaptureLayout {
         return try CaptureLayoutCache.instance.layout(ctx: self.context)
@@ -397,7 +355,7 @@ public struct FunctionMirror: Hashable {
         return result
     }
 
-    public static func == (lhs: FunctionMirror, rhs: FunctionMirror) -> Bool {
+    public static func == (lhs: FunctionMirrorImpl, rhs: FunctionMirrorImpl) -> Bool {
         if lhs.function != rhs.function {
             // Totally unrelated blocks
             return false
@@ -427,5 +385,52 @@ public struct FunctionMirror: Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(self.function)
+    }
+}
+
+public struct FunctionMirror<T>: Hashable {
+    public let value: T // To retain the context, in case FunctionMirror outlives its parameter.
+    private let impl: FunctionMirrorImpl
+
+    public var function: UnsafeRawPointer {
+        return self.impl.function
+    }
+
+    public var context: UnsafeRawPointer? {
+        return self.impl.context
+    }
+
+    public init(reflecting f: T) throws {
+        let info = try functionInfo(of: f)
+        if info.callingConvention != .swift {
+            throw RuntimeError.unsupportedCallingConvention(function: f, callingConvention: info.callingConvention)
+        }
+
+        self.value = f
+
+        var mutableF = f
+        self.impl = withUnsafePointer(to: &mutableF) {
+            return $0.raw.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
+        }
+    }
+
+    public func captureLayout() throws -> CaptureLayout {
+        return try self.impl.captureLayout()
+    }
+
+    public func capturedValues() throws -> [Any] {
+        return try self.impl.capturedValues()
+    }
+
+    public func captureReferences() throws -> [CaptureReference] {
+        return try self.impl.captureReferences()
+    }
+
+    public static func == (lhs: FunctionMirror<T>, rhs: FunctionMirror<T>) -> Bool {
+        return lhs.impl == rhs.impl
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(self.impl)
     }
 }

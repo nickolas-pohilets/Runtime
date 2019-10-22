@@ -42,7 +42,7 @@ func XCTAssertTypeEqual(_ lhs: Any.Type, _ rhs: Any.Type, _ message: String = ""
     }
 }
 
-func mirror(reflecting f: Any) throws -> FunctionMirror {
+func mirror(reflecting f: Any) throws -> FunctionMirror<Any> {
     let m = try FunctionMirror(reflecting: f)
     let values = try m.capturedValues()
     if values.count == 1 {
