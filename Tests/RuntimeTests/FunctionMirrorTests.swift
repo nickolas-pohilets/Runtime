@@ -29,6 +29,10 @@ fileprivate struct MyStruct: Hashable {
     let c: [Bool]
 }
 
+fileprivate struct NonHashableStruct {
+    let a: Int
+}
+
 fileprivate class MyClass {
     var value: String
 
@@ -40,6 +44,24 @@ fileprivate class MyClass {
         print(self.value)
     }
 }
+
+fileprivate class HashableBase: Hashable {
+    var value: String
+    init(value: String) {
+        self.value = value
+    }
+
+    static func == (lhs: HashableBase, rhs: HashableBase) -> Bool {
+        return lhs.value == rhs.value
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(value)
+    }
+}
+
+fileprivate class HashableDerivedA: HashableBase {}
+fileprivate class HashableDerivedB: HashableBase {}
 
 struct ArrayAndInt: Hashable {
     var a: [String]
@@ -218,6 +240,20 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertNotEqual(m, try mirror(reflecting: makeAny(42)))
     }
 
+    func testAnyNonHashableStruct() throws {
+        let s = NonHashableStruct(a: 22)
+        let f = makeAny(s)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual((values[0] as? NonHashableStruct)?.a, 22)
+
+        XCTAssertEqual(m, try mirror(reflecting: f))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(NonHashableStruct(a: 22))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(NonHashableStruct(a: 21))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(22)))
+    }
+
     func testAnyNonHashableClass() throws {
         let c = MyClass(value: "abc")
         let f = makeAny(c)
@@ -229,6 +265,51 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertEqual(m, try mirror(reflecting: makeAny(c)))
         XCTAssertNotEqual(m, try mirror(reflecting: makeAny(MyClass(value: "abc"))))
         XCTAssertNotEqual(m, try mirror(reflecting: makeAny(42)))
+    }
+
+    func testAnyHashableClass() throws {
+        let c1: HashableBase = HashableDerivedA(value: "abc")
+        let c2: HashableBase = HashableDerivedB(value: "abc")
+        XCTAssertEqual(c1, c2)
+        let f = makeAny(c1)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssert(values[0] as? HashableDerivedA === c1)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny(c2)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(HashableDerivedA(value: "xyz"))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(42)))
+    }
+
+    func testAnyObjC() throws {
+        let c1 = NSArray()
+        let c2 = NSArray()
+        XCTAssertEqual(c1, c2)
+        let f = makeAny(c1)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssert(values[0] as? NSArray === c1)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny(c2)))
+        XCTAssertEqual(m, try mirror(reflecting: makeAny([] as NSArray)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(["abc"] as NSArray)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny([])))
+    }
+
+    func testAnyType() throws {
+        let t1: Any.Type = String.self
+        let t2: Any.Type = Int.self
+        let f = makeAny(t1)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(String(describing: values[0]), "String")
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny(t1)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(t2)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny("")))
     }
 
     func testMethod() throws {
