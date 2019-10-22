@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2017 Wesley Wickwire
+// Copyright (c) 2019 Mykola Pokhylets
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,38 +22,7 @@
 
 import Foundation
 
-func metadataPointer(type: Any.Type) -> UnsafeMutablePointer<Int> {
-    return unsafeBitCast(type, to: UnsafeMutablePointer<Int>.self)
-}
-
-func metadata(of type: Any.Type) throws -> MetadataInfo {
-    
-    let kind = Kind(type: type)
-    
-    switch kind {
-    case .struct:
-        return StructMetadata(type: type)
-    case .class:
-        return ClassMetadata(type: type)
-    case .existential:
-        return ProtocolMetadata(type: type)
-    case .tuple:
-        return TupleMetadata(type: type)
-    case .optional:
-        fallthrough
-    case .enum:
-        return EnumMetadata(type: type)
-    case .function:
-        return FunctionMetadata(type: type)
-    case .metatype:
-        return MetatypeMetadata(type: type)
-    default:
-        throw RuntimeError.couldNotGetTypeInfo(type: type, kind: kind)
-    }
-}
-
-func swiftObject() -> Any.Type {
-    class Temp {}
-    let md = ClassMetadata(type: Temp.self)
-    return md.pointer.pointee.superClass
+struct MetatypeMetadataLayout: MetadataLayoutType {
+    var _kind: Int
+    var type: Any.Type
 }

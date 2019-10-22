@@ -21,6 +21,8 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		4AD7251F235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD7251E235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift */; };
+		4AD72521235E00300041E2F8 /* MetatypeMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD72520235E00300041E2F8 /* MetatypeMetadata.swift */; };
 		OBJ_103 /* CRuntime.c in Sources */ = {isa = PBXBuildFile; fileRef = OBJ_10 /* CRuntime.c */; };
 		OBJ_105 /* CRuntime.h in Headers */ = {isa = PBXBuildFile; fileRef = OBJ_12 /* CRuntime.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		OBJ_112 /* DefaultValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = OBJ_16 /* DefaultValue.swift */; };
@@ -125,6 +127,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		4AD7251E235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetatypeMetadataLayout.swift; sourceTree = "<group>"; };
+		4AD72520235E00300041E2F8 /* MetatypeMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetatypeMetadata.swift; sourceTree = "<group>"; };
 		OBJ_10 /* CRuntime.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CRuntime.c; sourceTree = "<group>"; };
 		OBJ_12 /* CRuntime.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CRuntime.h; sourceTree = "<group>"; };
 		OBJ_14 /* Runtime.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Runtime.h; sourceTree = "<group>"; };
@@ -289,6 +293,7 @@
 				OBJ_37 /* TupleMetadataLayout.swift */,
 				OBJ_38 /* TypeDescriptor.swift */,
 				OBJ_39 /* ValueWitnessTable.swift */,
+				4AD7251E235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift */,
 			);
 			path = Layouts;
 			sourceTree = "<group>";
@@ -310,11 +315,12 @@
 				OBJ_52 /* ProtocolMetadata.swift */,
 				OBJ_53 /* StructMetadata.swift */,
 				OBJ_54 /* TupleMetadata.swift */,
+				4AD72520235E00300041E2F8 /* MetatypeMetadata.swift */,
 			);
 			path = Metadata;
 			sourceTree = "<group>";
 		};
-		OBJ_5 /*  */ = {
+		OBJ_5 = {
 			isa = PBXGroup;
 			children = (
 				OBJ_6 /* Package.swift */,
@@ -328,7 +334,6 @@
 				OBJ_96 /* Podfile */,
 				OBJ_97 /* Runtime.podspec */,
 			);
-			name = "";
 			sourceTree = "<group>";
 		};
 		OBJ_55 /* Models */ = {
@@ -529,7 +534,7 @@
 			knownRegions = (
 				en,
 			);
-			mainGroup = OBJ_5 /*  */;
+			mainGroup = OBJ_5;
 			productRefGroup = OBJ_88 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -567,6 +572,7 @@
 				OBJ_120 /* FieldDescriptor.swift in Sources */,
 				OBJ_121 /* FunctionMetadataLayout.swift in Sources */,
 				OBJ_122 /* HeapGenericLocalVariableMetadataLayout.swift in Sources */,
+				4AD72521235E00300041E2F8 /* MetatypeMetadata.swift in Sources */,
 				OBJ_123 /* HeapLocalVariableMetadataLayout.swift in Sources */,
 				OBJ_124 /* MangledTypeName.swift in Sources */,
 				OBJ_125 /* MetadataLayoutType.swift in Sources */,
@@ -609,6 +615,7 @@
 				OBJ_162 /* GettersSetters.swift in Sources */,
 				OBJ_163 /* Pointer+Extensions.swift in Sources */,
 				OBJ_164 /* RetainCounts.swift in Sources */,
+				4AD7251F235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift in Sources */,
 				OBJ_165 /* String+Extensions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
