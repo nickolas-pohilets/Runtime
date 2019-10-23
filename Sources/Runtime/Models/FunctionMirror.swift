@@ -97,7 +97,6 @@ public struct CaptureField {
             case .none:
                 return false
             case .any:
-                // Note: using getter(type: Any.self) produces Any wrapped into an Any
                 guard let lhsValue = asHashable(lhsPtr.assumingMemoryBound(to: Any.self).pointee) else { return false }
                 guard let rhsValue = asHashable(rhsPtr.assumingMemoryBound(to: Any.self).pointee) else { return false }
                 return lhsValue == rhsValue
@@ -409,8 +408,9 @@ public struct FunctionMirror<T>: Hashable {
         self.value = f
 
         var mutableF = f
-        self.impl = withUnsafePointer(to: &mutableF) {
-            return $0.raw.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
+        self.impl = withUnsafeBytes(of: &mutableF) {
+            assert($0.count >= MemoryLayout<FunctionMirrorImpl>.size)
+            return $0.baseAddress!.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
         }
     }
 

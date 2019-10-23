@@ -87,6 +87,12 @@ class FunctionMirrorTests: XCTestCase {
     }
 
     @inline(never)
+    private func makeBuiltInAsAny(_ a: Int, _ s: String, _ b: Int, _ f: Bool) -> Any {
+        // Wrapping into Any should be encapsulated into a funciton, otherwise different reabstraction thunks are created
+        return { if f { print(a + b) } else { print(s) } }
+    }
+
+    @inline(never)
     private func makeArray( _ x: [String]) -> () -> Void {
         return { print(x) }
     }
@@ -309,6 +315,25 @@ class FunctionMirrorTests: XCTestCase {
 
         XCTAssertEqual(m, try mirror(reflecting: makeAny(t1)))
         XCTAssertNotEqual(m, try mirror(reflecting: makeAny(t2)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny("")))
+    }
+
+    func testAnyFunction() throws {
+        let a = makeBuiltInAsAny(37, "abc", 42, true)
+        let b = makeBuiltInAsAny(37, "abc", 42, true)
+        let c = makeBuiltInAsAny(42, "xyz", -1, false)
+        XCTAssertEqual(try mirror(reflecting: a), try mirror(reflecting: b))
+
+        let f = makeAny(a)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        let mx = try mirror(reflecting: values[0])
+        let my = try mirror(reflecting: a)
+        XCTAssertEqual(mx, my)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny(b)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(c)))
         XCTAssertNotEqual(m, try mirror(reflecting: makeAny("")))
     }
 
