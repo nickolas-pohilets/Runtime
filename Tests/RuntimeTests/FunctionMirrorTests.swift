@@ -108,8 +108,13 @@ class FunctionMirrorTests: XCTestCase {
     }
 
     @inline(never)
-    private func makeMethod(_ value: String) -> () -> Void {
-        return MyClass(value: value).dump
+    private func makeMethod(instance: MyClass) -> () -> Void {
+        return instance.dump
+    }
+
+    @inline(never)
+    private func makeMethod(value: String) -> (String) -> Bool {
+        return value.hasPrefix
     }
 
     @inline(never)
@@ -354,17 +359,35 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertNotEqual(m, try mirror(reflecting: makeAny(())))
     }
 
-    func testMethod() throws {
-        let f = makeMethod("hello")
+    func testClassMethod() throws {
+        let obj1 = MyClass(value: "hello")
+        let obj2 = MyClass(value: "hello")
+        let f = makeMethod(instance: obj1)
         let m = try mirror(reflecting: f)
         let values = try m.capturedValues()
         XCTAssertEqual(values.count, 2)
         if let obj = values[0] as? MyClass {
-            XCTAssertEqual(obj.value, "hello")
+            XCTAssert(obj === obj1)
         } else {
             XCTFail("Failed to read captured instance")
         }
         XCTAssert(values[1] is UnsafeRawPointer)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeMethod(instance: obj1)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeMethod(instance: obj2)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeBuiltIn(37, "abc", 42, true)))
+    }
+
+    func testStructMethod() throws {
+        let f = makeMethod(value: "abc")
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        XCTAssertEqual(values[0] as? String, "abc")
+
+        XCTAssertEqual(m, try mirror(reflecting: makeMethod(value: "abc")))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeMethod(value: "xyz")))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeMethod(instance: MyClass(value: "abc"))))
     }
 
     func testSharedContext() throws {
