@@ -29,7 +29,7 @@ public enum EqualityStrategy {
     case function
     case reference
     case tuple([(Int, EqualityStrategy)])
-    case any
+    case existential(Any.Type)
 
     init(type: Any.Type) throws {
         self = try EqualityStrategy(info: try metadata(of: type))
@@ -38,9 +38,7 @@ public enum EqualityStrategy {
     init(info: MetadataInfo) throws {
         let type = info.type
         let kind = info.kind
-        if type == Any.self {
-            self = .any
-        } else if let hashableWitnessTable = getHashableProtocolWitness(type: type) {
+        if let hashableWitnessTable = getHashableProtocolWitness(type: type) {
             self = .witnessTable(type, hashableWitnessTable)
         } else if kind == .function {
             let funcInfo = try functionInfo(of: type)
@@ -51,13 +49,15 @@ public enum EqualityStrategy {
             } else {
                 self = .none
             }
+        } else if isReferenceKind(kind) {
+            assert(info.size == MemoryLayout<UnsafeRawPointer>.size)
+            self = .reference
         } else if kind == .tuple {
             let info = try typeInfo(of: type)
             let fields = try info.properties.map { ($0.offset, try EqualityStrategy(type: $0.type)) }
             self = .tuple(fields)
-        } else if isReferenceKind(kind) {
-            assert(info.size == MemoryLayout<UnsafeRawPointer>.size)
-            self = .reference
+        } else if kind == .existential {
+            self = .existential(type)
         } else {
             self = .none
         }
@@ -86,10 +86,10 @@ public enum EqualityStrategy {
                 }
             }
             return true
-        case .any:
+        case let .existential(type):
             return anyAreEqual(
-                lhs: lhs.assumingMemoryBound(to: Any.self).pointee,
-                rhs: rhs.assumingMemoryBound(to: Any.self).pointee
+                lhs: getters(type: type).get(from: lhs),
+                rhs: getters(type: type).get(from: rhs)
             )
         }
     }

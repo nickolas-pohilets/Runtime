@@ -23,17 +23,21 @@
 import XCTest
 @testable import Runtime
 
-fileprivate struct MyStruct: Hashable {
+fileprivate struct MyStruct: Hashable, CustomStringConvertible {
     let a: Int
     let b: String
     let c: [Bool]
+
+    var description: String {
+        return "a=\(a), b = \(b), c = \(c)"
+    }
 }
 
 fileprivate struct NonHashableStruct {
     let a: Int
 }
 
-fileprivate class MyClass {
+fileprivate class MyClass: CustomStringConvertible {
     var value: String
 
     init(value: String) {
@@ -42,6 +46,10 @@ fileprivate class MyClass {
 
     func dump() {
         print(self.value)
+    }
+
+    var description: String {
+        return "MyClass(value: \(self.value))"
     }
 }
 
@@ -100,6 +108,11 @@ class FunctionMirrorTests: XCTestCase {
     @inline(never)
     private func makeStruct(_ s: MyStruct) -> () -> Void {
         return { print(s) }
+    }
+
+    @inline(never)
+    private func makeExistential(_ x: CustomStringConvertible, _ y: CustomStringConvertible, _ z: CustomStringConvertible) -> () -> Void {
+        return { print(x.description + y.description + z.description) }
     }
 
     @inline(never)
@@ -199,6 +212,26 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertNotEqual(m, try mirror(reflecting: makeStruct(MyStruct(a: 21, b: "xyz", c: [true, false, true]))))
         XCTAssertNotEqual(m, try mirror(reflecting: makeStruct(MyStruct(a: 22, b: "abc", c: [true, false, true]))))
         XCTAssertNotEqual(m, try mirror(reflecting: makeStruct(MyStruct(a: 22, b: "xyz", c: [true, true, true]))))
+    }
+
+    func testExistential() throws {
+        let s1 = MyStruct(a: 22, b: "xyz", c: [true, true, true])
+        let s2 = MyStruct(a: -1, b: "abc", c: [true, false, true])
+        let obj1 = MyClass(value: "abc")
+        let obj2 = MyClass(value: "abc")
+        let f = makeExistential(42, s1, obj1)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 3)
+        XCTAssertEqual(values[0] as? Int, 42)
+        XCTAssertEqual(values[1] as? MyStruct, s1)
+        XCTAssert(values[2] as? MyClass === obj1)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeExistential(42, s1, obj1)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeExistential(-2, s1, obj1)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeExistential(42, s2, obj1)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeExistential(42, s1, obj2)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeEmptyFunc()))
     }
 
     func testAnyInt() throws {
