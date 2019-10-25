@@ -21,6 +21,7 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		4A335F3423631C16008D6C8F /* EqualityStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A335F3323631C16008D6C8F /* EqualityStrategy.swift */; };
 		4AD7251F235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD7251E235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift */; };
 		4AD72521235E00300041E2F8 /* MetatypeMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD72520235E00300041E2F8 /* MetatypeMetadata.swift */; };
 		OBJ_103 /* CRuntime.c in Sources */ = {isa = PBXBuildFile; fileRef = OBJ_10 /* CRuntime.c */; };
@@ -127,6 +128,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		4A335F3323631C16008D6C8F /* EqualityStrategy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqualityStrategy.swift; sourceTree = "<group>"; };
 		4AD7251E235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetatypeMetadataLayout.swift; sourceTree = "<group>"; };
 		4AD72520235E00300041E2F8 /* MetatypeMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetatypeMetadata.swift; sourceTree = "<group>"; };
 		OBJ_10 /* CRuntime.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CRuntime.c; sourceTree = "<group>"; };
@@ -347,6 +349,7 @@
 				OBJ_61 /* PropertyInfo.swift */,
 				OBJ_62 /* TypeInfo.swift */,
 				OBJ_63 /* TypeInfoConvertible.swift */,
+				4A335F3323631C16008D6C8F /* EqualityStrategy.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -566,6 +569,7 @@
 				OBJ_114 /* ClassHeader.swift in Sources */,
 				OBJ_115 /* ClassMetadataLayout.swift in Sources */,
 				OBJ_116 /* ClassTypeDescriptor.swift in Sources */,
+				4A335F3423631C16008D6C8F /* EqualityStrategy.swift in Sources */,
 				OBJ_117 /* EnumMetadataLayout.swift in Sources */,
 				OBJ_118 /* EnumTypeDescriptor.swift in Sources */,
 				OBJ_119 /* ExistentialContainter.swift in Sources */,

@@ -25,7 +25,12 @@ import Foundation
 struct ExistentialContainer {
     let buffer: ExistentialContainerBuffer
     let type: Any.Type
-    let witnessTable: Int
+    //let witnessTable: Int // Missing for Any
+}
+
+struct AnyContainer {
+    let buffer: ExistentialContainerBuffer
+    let type: Any.Type
 }
 
 struct ExistentialContainerBuffer {

@@ -23,16 +23,8 @@
 import Foundation
 import CRuntime
 
-public enum HashableSupport {
-    case none
-    case witnessTable(UnsafeRawPointer)
-    case reference
-    case function
-    case any
-}
-
 public enum CaptureTypeInfo {
-    case direct(type: Any.Type, hashable: HashableSupport)
+    case direct(type: Any.Type, equality: EqualityStrategy)
     case indirect(layout: CaptureLayout)
 }
 
@@ -92,25 +84,8 @@ public struct CaptureField {
         let lhsPtr = lhs.advanced(by: offset)
         let rhsPtr = rhs.advanced(by: offset)
         switch typeInfo {
-        case let .direct(type, hashable):
-            switch hashable {
-            case .none:
-                return false
-            case .any:
-                guard let lhsValue = asHashable(lhsPtr.assumingMemoryBound(to: Any.self).pointee) else { return false }
-                guard let rhsValue = asHashable(rhsPtr.assumingMemoryBound(to: Any.self).pointee) else { return false }
-                return lhsValue == rhsValue
-            case let .witnessTable(witnessTable):
-                return runtime_equalityHelper(lhsPtr, rhsPtr, metadataPointer(type: type), witnessTable)
-            case .reference:
-                let lhsValue = lhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-                let rhsValue = rhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-                return lhsValue == rhsValue
-            case .function:
-                let lhsMirror = lhsPtr.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
-                let rhsMirror = rhsPtr.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
-                return lhsMirror == rhsMirror
-            }
+        case let .direct(_, equality):
+            return equality.areEqual(lhsPtr, rhsPtr)
         case let .indirect(layout):
             return layout.areEqual(
                 lhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee,
@@ -170,49 +145,6 @@ public struct CaptureLayout {
             }
         }
         return true
-    }
-}
-
-private func getHashableProtocolWitness(type: Any.Type) -> UnsafeRawPointer? {
-    let typeAsPtr = unsafeBitCast(type, to: UnsafeRawPointer.self)
-    let hashableDescriptor: UnsafeRawPointer = runtime_getHashableProtocolDescriptor()
-    return swift_conformsToProtocol(typeAsPtr, hashableDescriptor)
-}
-
-public func equalityHelperImpl<T: Hashable>(_ lhs: UnsafePointer<T>, _ rhs: UnsafePointer<T>) -> Bool {
-    return lhs.pointee == rhs.pointee
-}
-
-private func asHashable(_ x: Any) -> AnyHashable? {
-    if let hashable = x as? AnyHashable {
-        return hashable
-    }
-    guard let info = try? metadata(of: type(of: x)) else { return nil }
-    if info.kind == .function {
-        if let mirror = try? FunctionMirror(reflecting: x) {
-            return AnyHashable(mirror)
-        } else if info.size == MemoryLayout<UnsafeRawPointer>.size {
-            return getReference(x)
-        } else {
-            return nil
-        }
-    } else if isReferenceKind(info.kind) {
-        assert(info.size == MemoryLayout<UnsafeRawPointer>.size)
-        return getReference(x)
-    } else {
-        return nil
-    }
-}
-
-private func isReferenceKind(_ kind: Kind) -> Bool {
-    return kind == .class || kind == .foreignClass || kind == .metatype || kind == .objCClassWrapper
-}
-
-private func getReference(_ x: Any) -> AnyHashable? {
-    var mutableX = x
-    return withUnsafePointer(to: &mutableX) {
-        let ptr = $0.withMemoryRebound(to: UnsafeRawPointer.self, capacity: 1) {$0.pointee}
-        return AnyHashable(ptr)
     }
 }
 
@@ -299,34 +231,15 @@ private final class CaptureLayoutCache {
                 let indirectLayout = try self.layoutLocked(ctx: indirectPtr)
                 layout.add(field: CaptureField(offset: alignedOffset, typeInfo: .indirect(layout: indirectLayout)), at: i)
             } else {
-                let hashable: HashableSupport
-                if fieldType == Any.self {
-                    hashable = .any
-                } else if let hashableWitnessTable = getHashableProtocolWitness(type: fieldType) {
-                    hashable = .witnessTable(hashableWitnessTable)
-                } else if fieldKind == .function {
-                    let funcInfo = try functionInfo(of: fieldType)
-                    if funcInfo.callingConvention == .swift {
-                        hashable = .function
-                    } else if info.size == MemoryLayout<UnsafeRawPointer>.size {
-                        hashable = .reference
-                    } else {
-                        hashable = .none
-                    }
-                } else if isReferenceKind(fieldKind) {
-                    assert(info.size == MemoryLayout<UnsafeRawPointer>.size)
-                    hashable = .reference
-                } else {
-                    hashable = .none
-                }
-                layout.add(field: CaptureField(offset: alignedOffset, typeInfo: .direct(type: fieldType, hashable: hashable)), at: i)
+                let equality = try EqualityStrategy(info: info)
+                layout.add(field: CaptureField(offset: alignedOffset, typeInfo: .direct(type: fieldType, equality: equality)), at: i)
             }
         }
         return layout
     }
 }
 
-private struct FunctionMirrorImpl: Hashable {
+struct FunctionMirrorImpl: Hashable {
     var function: UnsafeRawPointer
     var context: UnsafeRawPointer?
 

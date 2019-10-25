@@ -23,7 +23,8 @@
 import Foundation
 
 protocol MetadataInfo {
-    
+
+    var type: Any.Type { get }
     var kind: Kind { get }
     var size: Int { get }
     var alignment: Int { get }

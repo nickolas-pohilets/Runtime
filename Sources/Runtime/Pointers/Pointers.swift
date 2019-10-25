@@ -52,18 +52,27 @@ func withClassValuePointer<Value, Result>(
 func withExistentialValuePointer<Value, Result>(
     of value: inout Value,
     _ body: (UnsafeMutableRawPointer) throws -> Result) throws -> Result {
+    return try withExistentialValuePointer(of: &value, dereferenceClass: true, { (ptr, _) in
+        try body(ptr)
+    })
+}
+
+func withExistentialValuePointer<Value, Result>(
+    of value: inout Value,
+    dereferenceClass: Bool,
+    _ body: (UnsafeMutableRawPointer, Any.Type) throws -> Result) throws -> Result {
     return try withUnsafePointer(to: &value) {
         let container = $0.withMemoryRebound(to: ExistentialContainer.self, capacity: 1) {$0.pointee}
         let info = try metadata(of: container.type)
-        if info.kind == .class || info.size > ExistentialContainerBuffer.size() {
+        if (info.kind == .class && dereferenceClass) || info.size > ExistentialContainerBuffer.size() {
             let base = $0.withMemoryRebound(to: UnsafeMutableRawPointer.self, capacity: 1) {$0.pointee}
             if info.kind == .struct {
-                return try body(base.advanced(by: existentialHeaderSize))
+                return try body(base.advanced(by: existentialHeaderSize), container.type)
             } else {
-                return try body(base)
+                return try body(base, container.type)
             }
         } else {
-            return try body($0.mutable.raw)
+            return try body($0.mutable.raw, container.type)
         }
     }
 }

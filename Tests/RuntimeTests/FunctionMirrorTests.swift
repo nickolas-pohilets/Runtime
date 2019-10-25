@@ -337,6 +337,23 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertNotEqual(m, try mirror(reflecting: makeAny("")))
     }
 
+    func testAnyTuple() throws {
+        let f = makeAny((42, "abc"))
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 1)
+        if let value = values[0] as? (Int, String) {
+            XCTAssertEqual(value.0, 42)
+            XCTAssertEqual(value.1, "abc")
+        } else {
+            XCTFail("Failed to read captured tuple")
+        }
+
+        XCTAssertEqual(m, try mirror(reflecting: makeAny((42, "abc"))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny((-1, "xyz"))))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeAny(())))
+    }
+
     func testMethod() throws {
         let f = makeMethod("hello")
         let m = try mirror(reflecting: f)
