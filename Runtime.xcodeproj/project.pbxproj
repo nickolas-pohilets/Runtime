@@ -22,7 +22,8 @@
 
 /* Begin PBXBuildFile section */
 		4A335F3423631C16008D6C8F /* EqualityStrategy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A335F3323631C16008D6C8F /* EqualityStrategy.swift */; };
-		4AD7251F235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD7251E235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift */; };
+		4A335F412365B198008D6C8F /* EqualityStrategyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A335F3F2365B14E008D6C8F /* EqualityStrategyTests.swift */; };
+		4AD7251F235DFFEE0041E2F8 /* UnknownMetadataLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD7251E235DFFEE0041E2F8 /* UnknownMetadataLayout.swift */; };
 		4AD72521235E00300041E2F8 /* MetatypeMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AD72520235E00300041E2F8 /* MetatypeMetadata.swift */; };
 		OBJ_103 /* CRuntime.c in Sources */ = {isa = PBXBuildFile; fileRef = OBJ_10 /* CRuntime.c */; };
 		OBJ_105 /* CRuntime.h in Headers */ = {isa = PBXBuildFile; fileRef = OBJ_12 /* CRuntime.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -129,7 +130,8 @@
 
 /* Begin PBXFileReference section */
 		4A335F3323631C16008D6C8F /* EqualityStrategy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqualityStrategy.swift; sourceTree = "<group>"; };
-		4AD7251E235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetatypeMetadataLayout.swift; sourceTree = "<group>"; };
+		4A335F3F2365B14E008D6C8F /* EqualityStrategyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqualityStrategyTests.swift; sourceTree = "<group>"; };
+		4AD7251E235DFFEE0041E2F8 /* UnknownMetadataLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnknownMetadataLayout.swift; sourceTree = "<group>"; };
 		4AD72520235E00300041E2F8 /* MetatypeMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetatypeMetadata.swift; sourceTree = "<group>"; };
 		OBJ_10 /* CRuntime.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = CRuntime.c; sourceTree = "<group>"; };
 		OBJ_12 /* CRuntime.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CRuntime.h; sourceTree = "<group>"; };
@@ -295,7 +297,7 @@
 				OBJ_37 /* TupleMetadataLayout.swift */,
 				OBJ_38 /* TypeDescriptor.swift */,
 				OBJ_39 /* ValueWitnessTable.swift */,
-				4AD7251E235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift */,
+				4AD7251E235DFFEE0041E2F8 /* UnknownMetadataLayout.swift */,
 			);
 			path = Layouts;
 			sourceTree = "<group>";
@@ -406,6 +408,7 @@
 				OBJ_83 /* GetSetStructTests.swift */,
 				OBJ_84 /* MetadataTests.swift */,
 				OBJ_85 /* ValuePointerTests.swift */,
+				4A335F3F2365B14E008D6C8F /* EqualityStrategyTests.swift */,
 				OBJ_86 /* ValueWitnessTableTests.swift */,
 				OBJ_87 /* XCTestManifests.swift */,
 			);
@@ -619,7 +622,7 @@
 				OBJ_162 /* GettersSetters.swift in Sources */,
 				OBJ_163 /* Pointer+Extensions.swift in Sources */,
 				OBJ_164 /* RetainCounts.swift in Sources */,
-				4AD7251F235DFFEE0041E2F8 /* MetatypeMetadataLayout.swift in Sources */,
+				4AD7251F235DFFEE0041E2F8 /* UnknownMetadataLayout.swift in Sources */,
 				OBJ_165 /* String+Extensions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -639,6 +642,7 @@
 				OBJ_185 /* FactoryTests.swift in Sources */,
 				OBJ_186 /* FunctionMirrorGenericTests.swift in Sources */,
 				OBJ_187 /* FunctionMirrorTestUtils.swift in Sources */,
+				4A335F412365B198008D6C8F /* EqualityStrategyTests.swift in Sources */,
 				OBJ_188 /* FunctionMirrorTests.swift in Sources */,
 				OBJ_189 /* GetSetClassTests.swift in Sources */,
 				OBJ_190 /* GetSetStructTests.swift in Sources */,

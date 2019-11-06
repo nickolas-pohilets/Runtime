@@ -25,6 +25,10 @@ import Foundation
 struct ProtocolMetadata: MetadataType {
     
     var pointer: UnsafeMutablePointer<ProtocolMetadataLayout>
+
+    var canBeStruct: Bool {
+        return pointer.pointee.flags.canBeStruct
+    }
     
     mutating func mangledName() -> String {
         return String(cString: pointer.pointee.protocolDescriptorVector.pointee.mangledName)

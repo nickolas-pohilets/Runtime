@@ -22,7 +22,6 @@
 
 import Foundation
 
-struct MetatypeMetadataLayout: MetadataLayoutType {
+struct UnknownMetadataLayout: MetadataLayoutType {
     var _kind: Int
-    var type: Any.Type
 }

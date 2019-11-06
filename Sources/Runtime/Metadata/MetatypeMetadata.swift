@@ -22,13 +22,9 @@
 
 import Foundation
 
-struct MetatypeMetadata: MetadataType, TypeInfoConvertible {
+struct UnknownMetadata: MetadataType, TypeInfoConvertible {
 
-    var pointer: UnsafeMutablePointer<MetatypeMetadataLayout>
-
-    func type() -> Any.Type {
-        return pointer.pointee.type
-    }
+    var pointer: UnsafeMutablePointer<UnknownMetadataLayout>
 
     mutating func toTypeInfo() -> TypeInfo {
         return TypeInfo(metadata: self)

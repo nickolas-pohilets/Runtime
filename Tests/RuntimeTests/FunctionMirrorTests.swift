@@ -22,6 +22,16 @@
 
 import XCTest
 @testable import Runtime
+import ObjectiveC.runtime
+
+// TODO: (directly | in Any)
+// Instance of Obj-C protocol
+// Instance of AnyObject (class protocol)
+// Metatype, subtype of class
+// Metatype, subtype of protocol
+// Protocol, Class, Selector
+// KeyPath
+
 
 fileprivate struct MyStruct: Hashable, CustomStringConvertible {
     let a: Int
@@ -76,6 +86,15 @@ struct ArrayAndInt: Hashable {
     var b: Int
 }
 
+fileprivate func class_getProperty(_ klass: AnyClass?, _ property: String) -> objc_property_t? {
+    var propName = property
+    return propName.withUTF8 {
+        $0.withMemoryRebound(to: Int8.self) {
+            class_getProperty(klass, $0.baseAddress!)
+        }
+    }
+}
+
 class FunctionMirrorTests: XCTestCase {
     
 //    static var allTests: [(String, (FunctionMirrorTests) -> () throws -> Void)] {
@@ -97,7 +116,7 @@ class FunctionMirrorTests: XCTestCase {
     @inline(never)
     private func makeBuiltInAsAny(_ a: Int, _ s: String, _ b: Int, _ f: Bool) -> Any {
         // Wrapping into Any should be encapsulated into a funciton, otherwise different reabstraction thunks are created
-        return { if f { print(a + b) } else { print(s) } }
+        return makeBuiltIn(a, s, b, f)
     }
 
     @inline(never)
@@ -116,6 +135,14 @@ class FunctionMirrorTests: XCTestCase {
     }
 
     @inline(never)
+    private func makeFunc(_ f: @escaping () -> Void) -> () -> Void {
+        return {
+            f()
+            f()
+        }
+    }
+
+    @inline(never)
     private func makeAny(_ x: Any) -> () -> Void {
         return { print(x) }
     }
@@ -128,6 +155,11 @@ class FunctionMirrorTests: XCTestCase {
     @inline(never)
     private func makeMethod(value: String) -> (String) -> Bool {
         return value.hasPrefix
+    }
+
+    @inline(never)
+    private func makeObjCMeta(class: AnyClass, protocol: Protocol, method: Method, selector: Selector, property: objc_property_t) -> () -> Void {
+        return { print(`class`, `protocol`, method, selector, property) }
     }
 
     @inline(never)
@@ -232,6 +264,12 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertNotEqual(m, try mirror(reflecting: makeExistential(42, s2, obj1)))
         XCTAssertNotEqual(m, try mirror(reflecting: makeExistential(42, s1, obj2)))
         XCTAssertNotEqual(m, try mirror(reflecting: makeEmptyFunc()))
+    }
+
+    func testFunc() throws {
+        let f = makeFunc(makeEmptyFunc())
+        let m = try mirror(reflecting: f)
+        print(m)
     }
 
     func testAnyInt() throws {
@@ -411,6 +449,37 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertNotEqual(m, try mirror(reflecting: makeBuiltIn(37, "abc", 42, true)))
     }
 
+    func testObjcMeta() throws {
+        let klass = NSString.self
+        let proto: Protocol = NSCopying.self
+        let sel = #selector(NSString.appending)
+        let method = class_getInstanceMethod(klass, sel)!
+        let prop = class_getProperty(klass, "length")!
+
+        let anotherKlass = NSNumber.self
+        let anotherProto: Protocol = NSMutableCopying.self
+        let anotherSel = #selector(NSString.appendingPathExtension)
+        let anotherMethod = class_getInstanceMethod(klass, anotherSel)!
+        let anotherProp = class_getProperty(anotherKlass, "objCType")!
+
+        let f = makeObjCMeta(class: klass, protocol: proto, method: method, selector: sel, property: prop)
+        let m = try mirror(reflecting: f)
+        let values = try m.capturedValues()
+        XCTAssertEqual(values.count, 5)
+        XCTAssert(values[0] as? AnyClass === klass)
+        XCTAssert(values[1] as? Protocol === proto)
+        XCTAssertEqual(values[2] as? Method, method)
+        XCTAssertEqual(values[3] as? Selector, sel)
+        XCTAssertEqual(values[4] as? objc_property_t, prop)
+
+        XCTAssertEqual(m, try mirror(reflecting: makeObjCMeta(class: klass, protocol: proto, method: method, selector: sel, property: prop)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeObjCMeta(class: anotherKlass, protocol: proto, method: method, selector: sel, property: prop)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeObjCMeta(class: klass, protocol: anotherProto, method: method, selector: sel, property: prop)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeObjCMeta(class: klass, protocol: proto, method: anotherMethod, selector: sel, property: prop)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeObjCMeta(class: klass, protocol: proto, method: method, selector: anotherSel, property: prop)))
+        XCTAssertNotEqual(m, try mirror(reflecting: makeObjCMeta(class: klass, protocol: proto, method: method, selector: sel, property: anotherProp)))
+    }
+
     func testStructMethod() throws {
         let f = makeMethod(value: "abc")
         let m = try mirror(reflecting: f)
@@ -477,6 +546,18 @@ class FunctionMirrorTests: XCTestCase {
         XCTAssertEqual(r11, r21)
         XCTAssertNotEqual(r12, r22)
 
+        // Comparing blocks which capture mutable variables does not make much sense.
+        // In theory, every instance of such block should be considered distinct, because
+        // they capture distinct references to mutable data, and mutable data should be compared by reference.
+        // But in practise there is no way to reliably determine if variable was captured by value or by reference.
+        do {
+            let (g1, g2) = makeByRef()
+            XCTAssertEqual(m1, try mirror(reflecting: g1))
+            XCTAssertEqual(m2, try mirror(reflecting: g2))
+            XCTAssertNotEqual(m1, try mirror(reflecting: g2))
+            XCTAssertNotEqual(m2, try mirror(reflecting: g1))
+        }
+
         XCTAssertEqual(f1(), ArrayAndInt(a: ["foo", "bar", "baz", "qux"], b: 14))
         XCTAssertEqual(r11.value as? [String], ["foo", "bar", "baz", "qux"])
         XCTAssertEqual(r12.value as? Int, 14)
@@ -490,5 +571,11 @@ class FunctionMirrorTests: XCTestCase {
         r21.value = ["xyz"]
         r22.value = 1
         XCTAssertEqual(f2(), ArrayAndInt(a: ["xyz", "zop"], b: 6))
+
+        do {
+            let (g1, g2) = makeByRef()
+            XCTAssertNotEqual(m1, try mirror(reflecting: g1))
+            XCTAssertNotEqual(m2, try mirror(reflecting: g2))
+        }
     }
 }

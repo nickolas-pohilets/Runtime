@@ -27,11 +27,11 @@ public enum EqualityStrategy {
     case none
     case witnessTable(Any.Type, UnsafeRawPointer)
     case function
-    case reference
+    case raw(Int)
     case tuple([(Int, EqualityStrategy)])
     case existential(Any.Type)
 
-    init(type: Any.Type) throws {
+    public init(type: Any.Type) throws {
         self = try EqualityStrategy(info: try metadata(of: type))
     }
 
@@ -44,14 +44,11 @@ public enum EqualityStrategy {
             let funcInfo = try functionInfo(of: type)
             if funcInfo.callingConvention == .swift {
                 self = .function
-            } else if info.size == MemoryLayout<UnsafeRawPointer>.size {
-                self = .reference
             } else {
-                self = .none
+                self = .raw(info.size)
             }
-        } else if isReferenceKind(kind) {
-            assert(info.size == MemoryLayout<UnsafeRawPointer>.size)
-            self = .reference
+        } else if isRawKind(kind) {
+            self = .raw(info.size)
         } else if kind == .tuple {
             let info = try typeInfo(of: type)
             let fields = try info.properties.map { ($0.offset, try EqualityStrategy(type: $0.type)) }
@@ -63,34 +60,45 @@ public enum EqualityStrategy {
         }
     }
 
-    func areEqual(_ lhs: UnsafeRawPointer, _ rhs: UnsafeRawPointer) -> Bool {
+    public func areEqual(lhsPtr: UnsafeRawPointer, rhsPtr: UnsafeRawPointer) -> Bool {
         switch self {
         case .none:
             return false
         case let .witnessTable(type, witnessTable):
-            return runtime_equalityHelper(lhs, rhs, metadataPointer(type: type), witnessTable)
+            return runtime_equalityHelper(lhsPtr, rhsPtr, metadataPointer(type: type), witnessTable)
         case .function:
-            let lhsMirror = lhs.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
-            let rhsMirror = rhs.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
+            let lhsMirror = lhsPtr.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
+            let rhsMirror = rhsPtr.assumingMemoryBound(to: FunctionMirrorImpl.self).pointee
             return lhsMirror == rhsMirror
-        case .reference:
-            let lhsValue = lhs.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-            let rhsValue = rhs.assumingMemoryBound(to: UnsafeRawPointer.self).pointee
-            return lhsValue == rhsValue
+        case let .raw(size):
+            let lhsBuffer = UnsafeRawBufferPointer(start: lhsPtr, count: size)
+            let rhsBuffer = UnsafeRawBufferPointer(start: rhsPtr, count: size)
+            return lhsBuffer.elementsEqual(rhsBuffer)
         case let .tuple(fields):
             for (offset, fieldStategy) in fields {
-                let lhsField = lhs.advanced(by: offset)
-                let rhsField = rhs.advanced(by: offset)
-                if (!fieldStategy.areEqual(lhsField, rhsField)) {
+                let lhsFieldPtr = lhsPtr.advanced(by: offset)
+                let rhsFieldPtr = rhsPtr.advanced(by: offset)
+                if (!fieldStategy.areEqual(lhsPtr: lhsFieldPtr, rhsPtr: rhsFieldPtr)) {
                     return false
                 }
             }
             return true
         case let .existential(type):
             return anyAreEqual(
-                lhs: getters(type: type).get(from: lhs),
-                rhs: getters(type: type).get(from: rhs)
+                lhs: getters(type: type).get(from: lhsPtr),
+                rhs: getters(type: type).get(from: rhsPtr)
             )
+        }
+    }
+
+    public static func areEqual<T>(_ lhs: T, _ rhs: T) throws -> Bool {
+        let eq = try Self(type: T.self)
+        var lhsCopy = lhs
+        var rhsCopy = rhs
+        return withUnsafePointer(to: &lhsCopy) { lhsPtr in
+            withUnsafePointer(to: &rhsCopy) { rhsPtr in
+                return eq.areEqual(lhsPtr: lhsPtr.raw, rhsPtr: rhsPtr.raw)
+            }
         }
     }
 }
@@ -116,14 +124,14 @@ private func anyAreEqual(lhs: Any, rhs: Any) -> Bool {
     let res: Bool? = try? withExistentialValuePointer(of: &lhsCopy, dereferenceClass: false) { (lhsPtr, lhsType) in
         return try withExistentialValuePointer(of: &rhsCopy, dereferenceClass: false) { (rhsPtr, rhsType) in
             guard lhsType == rhsType else { return false }
-            return try EqualityStrategy(type: lhsType).areEqual(lhsPtr, rhsPtr)
+            return try EqualityStrategy(type: lhsType).areEqual(lhsPtr: lhsPtr, rhsPtr: rhsPtr)
         }
     }
     return res ?? false
 }
 
-private func isReferenceKind(_ kind: Kind) -> Bool {
-    return kind == .class || kind == .foreignClass || kind == .metatype || kind == .objCClassWrapper
+private func isRawKind(_ kind: Kind) -> Bool {
+    return kind == .class || kind == .foreignClass || kind == .metatype || kind == .objCClassWrapper || kind == .existentialMetatype
 }
 
 private func getReference(_ x: Any) -> AnyHashable? {

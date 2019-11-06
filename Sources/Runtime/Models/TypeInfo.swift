@@ -59,24 +59,6 @@ public struct TypeInfo {
 }
 
 public func typeInfo(of type: Any.Type) throws -> TypeInfo {
-    let kind = Kind(type: type)
-    
-    var typeInfoConvertible: TypeInfoConvertible
-    
-    switch kind {
-    case .struct:
-        typeInfoConvertible = StructMetadata(type: type)
-    case .class:
-        typeInfoConvertible = ClassMetadata(type: type)
-    case .existential:
-        typeInfoConvertible = ProtocolMetadata(type: type)
-    case .tuple:
-        typeInfoConvertible = TupleMetadata(type: type)
-    case .enum, .optional:
-        typeInfoConvertible = EnumMetadata(type: type)
-    default:
-        throw RuntimeError.couldNotGetTypeInfo(type: type, kind: kind)
-    }
-    
+    var typeInfoConvertible = try metadata(of: type)
     return try typeInfoConvertible.toTypeInfo()
 }

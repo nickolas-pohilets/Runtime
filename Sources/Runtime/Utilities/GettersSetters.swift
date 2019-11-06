@@ -27,7 +27,11 @@ extension Getters {
     static func get(from pointer: UnsafeRawPointer) -> Any {
         if Kind(type: Self.self) == .existential {
             // Prevent double wrapping
-            return pointer.assumingMemoryBound(to: Any.self).pointee
+            if ProtocolMetadata(type: Self.self).canBeStruct {
+                return pointer.assumingMemoryBound(to: Any.self).pointee
+            } else {
+                return pointer.assumingMemoryBound(to: AnyObject.self).pointee
+            }
         } else {
             return pointer.assumingMemoryBound(to: Self.self).pointee
         }

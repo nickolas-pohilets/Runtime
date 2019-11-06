@@ -26,7 +26,7 @@ func metadataPointer(type: Any.Type) -> UnsafeMutablePointer<Int> {
     return unsafeBitCast(type, to: UnsafeMutablePointer<Int>.self)
 }
 
-func metadata(of type: Any.Type) throws -> MetadataInfo {
+func metadata(of type: Any.Type) throws -> MetadataInfo & TypeInfoConvertible {
     
     let kind = Kind(type: type)
     
@@ -46,7 +46,11 @@ func metadata(of type: Any.Type) throws -> MetadataInfo {
     case .function:
         return FunctionMetadata(type: type)
     case .metatype:
-        return MetatypeMetadata(type: type)
+        return UnknownMetadata(type: type)
+    case .existentialMetatype:
+        return UnknownMetadata(type: type)
+    case .objCClassWrapper:
+        return UnknownMetadata(type: type)
     default:
         throw RuntimeError.couldNotGetTypeInfo(type: type, kind: kind)
     }

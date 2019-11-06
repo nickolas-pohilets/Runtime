@@ -85,7 +85,7 @@ public struct CaptureField {
         let rhsPtr = rhs.advanced(by: offset)
         switch typeInfo {
         case let .direct(_, equality):
-            return equality.areEqual(lhsPtr, rhsPtr)
+            return equality.areEqual(lhsPtr: lhsPtr, rhsPtr: rhsPtr)
         case let .indirect(layout):
             return layout.areEqual(
                 lhsPtr.assumingMemoryBound(to: UnsafeRawPointer.self).pointee,
@@ -115,6 +115,10 @@ public struct CaptureLayout {
         if !field.isHashable {
             self.pointer.assumingMemoryBound(to: Int.self).mutable.pointee &= ~1
         }
+    }
+
+    fileprivate func deallocateMemory() {
+        self.pointer.deallocate()
     }
 
     var isHashable: Bool {
@@ -215,6 +219,12 @@ private final class CaptureLayoutCache {
         }
 
         let layout = CaptureLayout(count: md.numCaptureTypes)
+        var shouldDeallocateLayout = true
+        defer {
+            if shouldDeallocateLayout {
+                layout.deallocateMemory()
+            }
+        }
 
         var offset = md.offsetToFirstCapture
         offset += MemoryLayout<Any.Type>.size * md.numBindings
@@ -235,6 +245,7 @@ private final class CaptureLayoutCache {
                 layout.add(field: CaptureField(offset: alignedOffset, typeInfo: .direct(type: fieldType, equality: equality)), at: i)
             }
         }
+        shouldDeallocateLayout = false
         return layout
     }
 }

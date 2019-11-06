@@ -294,6 +294,7 @@ fileprivate struct Person {
     var age = 25
     var pet = Pet()
     var favoriteNumbers = [1, 2, 3, 4, 5]
+    var vehicle: Drivable = Bicycle(id: "236wdfg42")
 }
 
 fileprivate struct Pet {
@@ -304,5 +305,22 @@ fileprivate struct Pet {
         self.name = name
         self.age = age
     }
+}
+
+fileprivate protocol Drivable {
+    func start()
+}
+
+fileprivate struct Bicycle: Drivable {
+    var id: String
+    func start() {}
+}
+
+fileprivate struct Car: Drivable {
+    var id: String
+    var licensePlate: String
+    var model: String
+    var year: Int
+    func start() {}
 }
 // swiftlint:enable type_body_length

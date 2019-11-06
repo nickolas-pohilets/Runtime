@@ -22,9 +22,39 @@
 
 import Foundation
 
+enum SpecialProtocol: UInt8 {
+    /// Not a special protocol.
+    ///
+    /// This must be 0 for ABI compatibility with Objective-C protocol_t records.
+    case none = 0
+
+    /// The Error protocol.
+    case error = 1
+}
+
+struct ExistentialTypeFlags {
+    private var data: UInt32
+
+    var numWitnessTable: Int {
+        return Int(data & 0x00FFFFFF)
+    }
+
+    var canBeStruct: Bool {
+        return data & 0x80000000 != 0
+    }
+
+    var hasSuperclass: Bool {
+        return data & 0x40000000 != 0
+    }
+
+    var specialProtocol: SpecialProtocol? {
+        return SpecialProtocol(rawValue: UInt8((data & 0x3F000000) >> 24))
+    }
+}
+
 struct ProtocolMetadataLayout: MetadataLayoutType {
     var _kind: Int
-    var layoutFlags: Int
+    var flags: ExistentialTypeFlags
     var numberOfProtocols: Int
     var protocolDescriptorVector: UnsafeMutablePointer<ProtocolDescriptor>
 }
