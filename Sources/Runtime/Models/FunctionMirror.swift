@@ -233,6 +233,12 @@ private final class CaptureLayoutCache {
             let fieldKind = Kind(type: fieldType)
             let effectiveType = fieldKind == .opaque ? UnsafeRawPointer.self: fieldType
             let info = try metadata(of: effectiveType)
+            if try mayBeWeakReference(info: info) {
+                // Weak references are reported as optional class references, but they are not binary compatible.
+                // And any attempt to inspect weak references to try to disambiguate is racy.
+                // Possible workaround - use wrapper types, like OptRef<T>/WeakRef<T> to disambiguate.
+                throw RuntimeError.weakReferenceAmbiguity(type: fieldType)
+            }
             let alignedOffset = (offset + info.alignment - 1) & ~(info.alignment - 1)
             offset = alignedOffset + info.size
 
@@ -248,6 +254,23 @@ private final class CaptureLayoutCache {
         shouldDeallocateLayout = false
         return layout
     }
+}
+
+private func mayBeWeakReference(info: MetadataInfo) throws -> Bool {
+    guard info.kind == .optional else { return false }
+    let enumMD = info as! EnumMetadata
+    let genericArgs = enumMD.genericArguments()
+    assert(genericArgs.count == 1)
+    let wrappedType = genericArgs[0]
+    let kind = Kind(type: wrappedType)
+    if kind == .class || kind == .objCClassWrapper {
+        return true
+    }
+    if kind == .existential {
+        let md = ProtocolMetadata(type: wrappedType)
+        return !md.canBeStruct
+    }
+    return false
 }
 
 struct FunctionMirrorImpl: Hashable {

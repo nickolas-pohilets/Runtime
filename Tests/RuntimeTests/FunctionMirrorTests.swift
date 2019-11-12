@@ -24,15 +24,6 @@ import XCTest
 @testable import Runtime
 import ObjectiveC.runtime
 
-// TODO: (directly | in Any)
-// Instance of Obj-C protocol
-// Instance of AnyObject (class protocol)
-// Metatype, subtype of class
-// Metatype, subtype of protocol
-// Protocol, Class, Selector
-// KeyPath
-
-
 fileprivate struct MyStruct: Hashable, CustomStringConvertible {
     let a: Int
     let b: String
@@ -47,7 +38,11 @@ fileprivate struct NonHashableStruct {
     let a: Int
 }
 
-fileprivate class MyClass: CustomStringConvertible {
+fileprivate protocol ClassProtocol: AnyObject {
+    func foo()
+}
+
+fileprivate class MyClass: CustomStringConvertible, ClassProtocol {
     var value: String
 
     init(value: String) {
@@ -60,6 +55,10 @@ fileprivate class MyClass: CustomStringConvertible {
 
     var description: String {
         return "MyClass(value: \(self.value))"
+    }
+
+    func foo() {
+        
     }
 }
 
@@ -190,6 +189,76 @@ class FunctionMirrorTests: XCTestCase {
             return ArrayAndInt(a: foo, b: k)
         }
         return (f1, f2)
+    }
+
+    @inline(never)
+    private func makeWeak(object: MyClass) -> () -> String {
+        return { [weak object] in
+            object.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeWeak(proto: AnyObject) -> () -> String {
+        return { [weak proto] in
+            proto.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeWeak(objc: NSObject) -> () -> String {
+        return { [weak objc] in
+            objc.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeWeak(objcProto: NSCopying) -> () -> String {
+        return { [weak objcProto] in
+            objcProto.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeWeak(error: NSError) -> () -> String {
+        return { [weak error] in
+            error.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeOpt(object: MyClass?) -> () -> String {
+        return {
+            object.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeOpt(proto: AnyObject?) -> () -> String {
+        return { [weak proto] in
+            proto.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeOpt(objc: NSObject?) -> () -> String {
+        return { [weak objc] in
+            objc.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeOpt(objcProto: NSCopying?) -> () -> String {
+        return { [weak objcProto] in
+            objcProto.map { String(describing: $0) } ?? "nil"
+        }
+    }
+
+    @inline(never)
+    private func makeOpt(error: NSError?) -> () -> String {
+        return {
+            error.map { String(describing: $0) } ?? "nil"
+        }
     }
 
     func testEmpty() throws {
@@ -577,5 +646,35 @@ class FunctionMirrorTests: XCTestCase {
             XCTAssertNotEqual(m1, try mirror(reflecting: g1))
             XCTAssertNotEqual(m2, try mirror(reflecting: g2))
         }
+    }
+
+    func verifyThrowsWeakReferenceAmbiguity(type: Any.Type, f: @escaping () -> String) throws {
+        let m = try mirror(reflecting: f)
+        do {
+            _ = try m.capturedValues()
+            XCTFail("Did not throw an error")
+        }
+        catch let RuntimeError.weakReferenceAmbiguity(t) {
+            XCTAssert(t == type)
+        }
+        catch {
+            XCTFail("Did throw an unexpected error")
+        }
+    }
+
+    func testWeak() throws {
+        let object: MyClass = MyClass(value: "abc")
+        let objc: NSObject & NSCopying = "abc" as NSMutableString
+        try self.verifyThrowsWeakReferenceAmbiguity(type: MyClass?.self, f: makeWeak(object: object))
+        try self.verifyThrowsWeakReferenceAmbiguity(type: AnyObject?.self, f: makeWeak(proto: object))
+        try self.verifyThrowsWeakReferenceAmbiguity(type: NSObject?.self, f: makeWeak(objc: objc))
+        try self.verifyThrowsWeakReferenceAmbiguity(type: NSCopying?.self, f: makeWeak(objcProto: objc))
+        try self.verifyThrowsWeakReferenceAmbiguity(type: NSError?.self, f: makeWeak(error: RuntimeError.genericFunctionsAreNotSupported as NSError))
+
+        try self.verifyThrowsWeakReferenceAmbiguity(type: MyClass?.self, f: makeOpt(object: object))
+        try self.verifyThrowsWeakReferenceAmbiguity(type: AnyObject?.self, f: makeOpt(proto: object))
+        try self.verifyThrowsWeakReferenceAmbiguity(type: NSObject?.self, f: makeOpt(objc: objc))
+        try self.verifyThrowsWeakReferenceAmbiguity(type: NSCopying?.self, f: makeOpt(objcProto: objc))
+        try self.verifyThrowsWeakReferenceAmbiguity(type: NSError?.self, f: makeOpt(error: RuntimeError.genericFunctionsAreNotSupported as NSError))
     }
 }

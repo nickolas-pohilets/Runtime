@@ -35,4 +35,5 @@ enum RuntimeError: Error {
     case unexpectedGenericParam(buffer: UnsafeBufferPointer<UInt8>)
     case unexpectedMetadataSource(buffer: UnsafeBufferPointer<UInt8>)
     case failedToDemangle(type: MangledTypeName)
+    case weakReferenceAmbiguity(type: Any.Type)
 }
